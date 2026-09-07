@@ -68,6 +68,64 @@ is deliberately loud rather than quiet:
 The check runs before any capture, so a run either records a complete set of
 rows or none — never a file truncated mid-window.
 
+## Querying
+
+Three ways in, in increasing order of power.
+
+**1. The built-in report** — the tests that matter, already written:
+
+```bash
+python3 analyze.py            # all series
+python3 analyze.py KXBTC15M
+```
+
+**2. `jq`** — best for quick, one-off questions against the raw JSONL:
+
+```bash
+cd data
+
+# windows that opened above 80c and still settled NO
+jq -r 'select(.first>80 and .settled_yes==false)
+       | "\(.window)  open \(.first)c  -> NO"' KXBTC15M.jsonl
+
+# mean range for a series
+jq -s 'map(.range)|add/length' KXBTC15M.jsonl
+```
+
+**3. SQL** — for anything with grouping or joins. `query.py` loads every row
+into an in-memory SQLite table called `w`; nothing is written back, so a bad
+query costs nothing:
+
+```bash
+python3 query.py                       # schema + sample rows
+python3 query.py "SELECT ..."          # inline
+echo "SELECT ..." | python3 query.py   # piped
+python3 query.py -f myquery.sql        # from a file
+```
+
+```sql
+SELECT series,
+       COUNT(*) n,
+       ROUND(AVG("range"),1) avg_range,
+       ROUND(100.0*SUM(settled_yes)/COUNT(*),1) pct_yes,
+       ROUND(100.0*SUM(CASE WHEN ("first">50)<>settled_yes THEN 1 ELSE 0 END)
+             /COUNT(*),1) pct_open_wrong
+FROM w GROUP BY series ORDER BY avg_range;
+```
+
+```
+  series    n    avg_range  pct_yes  pct_open_wrong
+  KXBTC15M  201  41.8       46.8     17.4
+  KXETH15M  201  67.9       52.7     45.8
+  KXSOL15M  201  68.7       46.8     44.8
+  KXXRP15M  201  70.3       51.7     44.8
+```
+
+That last column is the most interesting thing in the dataset so far. **BTC's
+opening print is wrong 17% of the time; the other three are wrong ~45%** — a
+coin flip. BTC's book is deep enough to price the window at the open; the
+others are not really priced at all.
+
 ## Analysis
 
 ```bash
