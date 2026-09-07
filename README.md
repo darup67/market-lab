@@ -148,43 +148,49 @@ python3 report.py --dry     # print it, send nothing
 python3 report.py           # build and send
 ```
 
-**It leads with health, not statistics.** The failure that matters here is
-silent — Kalshi keeps ~2 days of settled markets, so a stopped recorder loses
-history permanently rather than falling behind. So the subject line carries the
-verdict (`OK` / `ATTENTION (n)`) and the body opens with any problems:
-
-- newest window more than 2h old — the recorder may have stopped
-- missing 15-minute slots inside the range already held
-- nothing captured in 24h
-- storage past 80% of the ceiling
-
-Then, in order:
-
-- **CAPTURE** — windows added, storage against the ceiling, years remaining
-- **READINGS** — per-series range, YES rate and opening-print accuracy
-- **BTC VOLATILITY REGIME** — current band and index, the last 2h as a sparkline,
-  the 24h split across LOW/NORMAL/HIGH, and how many times the band changed
-- **BTC INDICATORS** — the calibration curve with confidence intervals and an
-  ASCII bar, reversal rate, and the widest windows
-- **FINDINGS** — the durable conclusions, **recomputed every morning** so they
-  age with the data instead of being quoted from a README that went stale
-
-The regime is computed from this repo's own rows using the same 4-window
-smoothing and 28¢/52¢ bands as the notifier, so the email can never disagree
-with the dataset it ships.
+**Ordered by what a person wants at 7am**, not by what the code can compute:
 
 ```
-BTC VOLATILITY REGIME
-  now        NORMAL  32.8c   (LOW <28c · NORMAL 28-52c · HIGH >52c)
-  last 2h    54 39 37 46 31 32 43 33c
-              H  ~  ~  ~  ~  ~  ~  ~
-  24h split  LOW 21%  NORMAL 52%  HIGH 27%
-             28 band change(s) in 24h
+BTC 15m recorder - OK - vol NORMAL 46c
+
+Recorder OK - 96 new BTC windows overnight, none missed.
+
+VOLATILITY
+   Right now      NORMAL  46c
+                  LOW under 28c / NORMAL 28-52c / HIGH over 52c
+   Overnight      20% low, 52% normal, 27% high
+   Band changes   28 in 24h  (it flickers - not a stable regime)
+
+OVERNIGHT  (96 BTC windows)
+   Settled YES        44 of 96  (45%)
+   Opening price right 77 of 96  (80%)
+   Average swing      41c
+   Surprise           21:45Z  opened 99c, settled NO
+
+CONTEXT  (all 202 BTC windows so far)
+   The opening price is right 83% of the time.
+   31% of windows are already decided when trading starts.
+   Volatility does not predict the next window (correlation +0.13).
 ```
 
-That last line is itself a finding: **28 band changes in a day** means the
-regime is unstable at this smoothing, which is the same story the +0.14
-persistence correlation tells.
+Four deliberate choices, after a first version that was six dense tables:
+
+- **BTC only.** The other three series get one line, because their opening
+  prints are coin flips and daily detail on them is noise.
+- **Overnight is separated from all-time.** The first is news; the second is
+  context that barely moves. Mixing them made neither readable.
+- **Standing analysis is compressed to three sentences.** Re-sending a ten-row
+  calibration curve every morning is how an email becomes one you stop opening.
+- **Plain words.** "Opening price right 80%" rather than "open wrong 20%",
+  no bare `corr`, no confidence-interval brackets. `analyze.py` is one command
+  away when the full statistics are wanted.
+
+The subject line carries the verdict and the current band —
+`BTC 15m recorder - OK - vol NORMAL 46c` — so it is triageable from a lock
+screen without opening it.
+
+Operational detail (storage, growth) is one line at the bottom, and only
+mentions the ceiling percentage once past 50%.
 
 Scheduled with `StartCalendarInterval`, which launchd reads in the machine's
 timezone. That means **07:00 EDT in summer and 07:00 EST in winter** — the

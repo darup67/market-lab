@@ -114,141 +114,118 @@ def pct_wrong(rows):
     return 100.0 * sum(1 for r in rows if (r["first"] > 50) != r["settled_yes"]) / len(rows)
 
 def build():
+    """
+    A morning email, not a dashboard dump.
+
+    Ordered by what a person actually wants at 7am: is it still running, what
+    is BTC's volatility doing, what happened overnight. Standing analysis that
+    barely moves day to day is compressed to two lines of context at the end —
+    repeating a ten-row calibration table every morning is how an email becomes
+    something you stop opening.
+
+    Focused on BTC because that is the market with a real book; the other three
+    get one line, since their opening prints are coin flips.
+    """
     data = load()
     if not data:
-        return "Kalshi recorder — NO DATA", "data/ is empty. Is com.dhruv.kalshi15m loaded?"
+        return "BTC 15m recorder — NO DATA", "data/ is empty. Is com.dhruv.kalshi15m loaded?"
 
-    now = datetime.now(timezone.utc)
-    day_ago = now - timedelta(hours=24)
-    used = sum(os.path.getsize(f) for f in glob.glob(os.path.join(HERE, "data", "*.jsonl")))
-    total = sum(len(v) for v in data.values())
+    now      = datetime.now(timezone.utc)
+    day_ago  = now - timedelta(hours=24)
+    used     = sum(os.path.getsize(f) for f in glob.glob(os.path.join(HERE, "data", "*.jsonl")))
+    total    = sum(len(v) for v in data.values())
+    btc      = data.get("KXBTC15M", [])
+    night    = [r for r in btc if (wtime(r) or day_ago) > day_ago]
 
-    L, problems = [], []
-
-    # --- health first ---
-    for s in sorted(data):
-        rows = data[s]
-        miss, expected = gaps(rows)
-        recent = [r for r in rows if (wtime(r) or day_ago) > day_ago]
+    # ---------------------------------------------------------------- health
+    problems = []
+    for s_, rows in sorted(data.items()):
         newest = max((t for t in (wtime(r) for r in rows) if t), default=None)
-        stale_h = (now - newest).total_seconds() / 3600 if newest else None
-        if stale_h is not None and stale_h > 2:
-            problems.append(f"{s}: newest window is {stale_h:.1f}h old — recorder may be stopped")
+        if newest and (now - newest).total_seconds() / 3600 > 2:
+            problems.append(f"{s_} last captured {(now-newest).total_seconds()/3600:.1f}h ago — recorder may be stopped")
+        miss, _ = gaps(rows)
         if miss:
-            problems.append(f"{s}: {len(miss)} missing window(s) of {expected} in range")
-        if not recent:
-            problems.append(f"{s}: nothing captured in 24h")
+            problems.append(f"{s_} is missing {len(miss)} window(s)")
+    if used / MAX_BYTES >= 0.8:
+        problems.append(f"storage {used/MAX_BYTES*100:.0f}% full — capture halts at 100%")
 
-    pct_full = used / MAX_BYTES * 100
-    if pct_full >= 80:
-        problems.append(f"storage at {pct_full:.0f}% of ceiling — capture halts at 100%")
-
-    L.append("STATUS: " + ("OK — capturing cleanly" if not problems else "ATTENTION"))
-    for p in problems:
-        L.append(f"  ! {p}")
+    L = []
+    if problems:
+        L.append("NEEDS ATTENTION")
+        for p_ in problems:
+            L.append(f"   - {p_}")
+    else:
+        L.append(f"Recorder OK - {len(night)} new BTC windows overnight, none missed.")
     L.append("")
 
-    # --- growth ---
-    L.append("CAPTURE")
-    added24 = 0
-    for s in sorted(data):
-        rows = data[s]
-        recent = [r for r in rows if (wtime(r) or day_ago) > day_ago]
-        added24 += len(recent)
-        span = f"{rows[0].get('window')} -> {rows[-1].get('window')}"
-        L.append(f"  {s:<10} {len(rows):>5} total  +{len(recent):>3} in 24h   {span}")
-    L.append(f"  {'':<10} {total:>5} windows (~{total/96:.1f} series-days), +{added24} yesterday")
-    L.append(f"  storage {fmt_bytes(used)} of {fmt_bytes(MAX_BYTES)} ({pct_full:.3f}%)")
-    if total and used:
-        per_day = (used / total) * 96 * len(data)
-        L.append(f"  growing ~{fmt_bytes(per_day)}/day -> ceiling in ~{(MAX_BYTES-used)/per_day/365:.0f} years")
-    L.append("")
-
-    # --- what the data says, refreshed ---
-    L.append("READINGS  (whole dataset, in-sample)")
-    L.append(f"  {'series':<10}{'n':>5}{'avg range':>11}{'YES%':>7}{'open wrong':>12}")
-    for s in sorted(data):
-        rows = data[s]
-        L.append(f"  {s:<10}{len(rows):>5}{st.mean([r['range'] for r in rows]):>10.1f}c"
-                 f"{100*sum(1 for r in rows if r['settled_yes'])/len(rows):>6.1f}%"
-                 f"{pct_wrong(rows):>11.1f}%")
-
-    btc = data.get("KXBTC15M", [])
-
-    # ---------------------------------------------------------- REGIME
+    # ------------------------------------------------------------ volatility
     if len(btc) > VOL_W:
         reg = regime_series(btc)
-        cur_row, cur_idx, cur_band = reg[-1]
-        L.append("")
-        L.append("BTC VOLATILITY REGIME")
-        L.append(f"  now        {cur_band}  {cur_idx:.1f}c   (LOW <{VOL_LOW}c · NORMAL {VOL_LOW}-{VOL_HIGH}c · HIGH >{VOL_HIGH}c)")
-
-        last8 = reg[-8:]
-        L.append("  last 2h    " + " ".join(f"{i:.0f}" for _, i, _ in last8) + "c")
-        L.append("             " + " ".join({"LOW":" L","NORMAL":" ~","HIGH":" H"}[b] for _, _, b in last8))
-
-        day = [(r, i, b) for r, i, b in reg if (wtime(r) or day_ago) > day_ago]
-        if day:
+        _, idx, bnd = reg[-1]
+        L.append("VOLATILITY")
+        L.append(f"   Right now      {bnd}  {idx:.0f}c")
+        L.append(f"                  LOW under {VOL_LOW}c / NORMAL {VOL_LOW}-{VOL_HIGH}c / HIGH over {VOL_HIGH}c")
+        night_reg = [(r, i, b) for r, i, b in reg if (wtime(r) or day_ago) > day_ago]
+        if night_reg:
             cnt = {"LOW": 0, "NORMAL": 0, "HIGH": 0}
-            for _, _, b in day:
+            for _, _, b in night_reg:
                 cnt[b] += 1
-            tot = len(day)
-            L.append("  24h split  " + "  ".join(f"{k} {100*v/tot:.0f}%" for k, v in cnt.items()))
-            trans = sum(1 for a, b in zip(day, day[1:]) if a[2] != b[2])
-            L.append(f"             {trans} band change(s) in 24h")
-
-    # ------------------------------------------------------- INDICATORS
-    if len(btc) >= 40:
+            t = len(night_reg)
+            L.append(f"   Overnight      {cnt['LOW']*100//t}% low, {cnt['NORMAL']*100//t}% normal, {cnt['HIGH']*100//t}% high")
+            ch = sum(1 for a, b in zip(night_reg, night_reg[1:]) if a[2] != b[2])
+            note = "  (it flickers - not a stable regime)" if ch > t * 0.15 else ""
+            L.append(f"   Band changes   {ch} in 24h{note}")
         L.append("")
-        L.append("BTC INDICATORS")
-        cal = defaultdict(list)
-        for r in btc:
-            cal[min(9, int(r["first"] // 10))].append(r["settled_yes"])
-        L.append("  calibration — opening print vs outcome")
-        for k in sorted(cal):
-            g = cal[k]
-            lo, hi = wilson(sum(g), len(g))
-            bar = "#" * round(sum(g) / len(g) * 20)
-            L.append(f"    {k*10:>3}-{k*10+9:<3}{len(g):>4}  {100*sum(g)/len(g):>3.0f}% YES "
-                     f"[{lo*100:>3.0f},{hi*100:>3.0f}]  {bar}")
 
-        rev = [r for r in btc if (r["first"] > 50) != r["settled_yes"]]
-        big = sorted(btc, key=lambda r: -r["range"])[:3]
-        L.append(f"  reversals        {len(rev)}/{len(btc)} = {100*len(rev)/len(btc):.0f}% of windows")
-        L.append("  widest windows   " + ", ".join(
-            f"{r['window']} {r['first']:.0f}->{r['last']:.0f}c" for r in big))
+    # ------------------------------------------------------------- overnight
+    if night:
+        yes   = sum(1 for r in night if r["settled_yes"])
+        right = sum(1 for r in night if (r["first"] > 50) == r["settled_yes"])
+        rng   = st.mean([r["range"] for r in night])
+        L.append(f"OVERNIGHT  ({len(night)} BTC windows)")
+        L.append(f"   Settled YES        {yes} of {len(night)}  ({100*yes//len(night)}%)")
+        L.append(f"   Opening price right {right} of {len(night)}  ({100*right//len(night)}%)")
+        L.append(f"   Average swing      {rng:.0f}c")
+        surprises = sorted((r for r in night if (r["first"] > 50) != r["settled_yes"]),
+                           key=lambda r: -abs(r["first"] - 50))[:2]
+        for r in surprises:
+            when = (wtime(r).strftime("%H:%MZ") if wtime(r) else r.get("window"))
+            L.append(f"   Surprise           {when}  opened {r['first']:.0f}c, settled "
+                     f"{'YES' if r['settled_yes'] else 'NO'}")
+        L.append("")
 
-    # --------------------------------------------------------- FINDINGS
-    L.append("")
-    L.append("FINDINGS  (recomputed each morning — these age with the data)")
+    # --------------------------------------------------------------- context
+    L.append(f"CONTEXT  (all {len(btc)} BTC windows so far)")
+    if btc:
+        w = pct_wrong(btc)
+        L.append(f"   The opening price is right {100-w:.0f}% of the time.")
+        dec = sum(1 for r in btc if r["first"] < 10 or r["first"] > 90)
+        L.append(f"   {100*dec//len(btc)}% of windows are already decided when trading starts.")
     if len(btc) > VOL_W + 10:
         pairs = [(st.mean([x["range"] for x in btc[i-VOL_W:i]]), btc[i]["range"])
                  for i in range(VOL_W, len(btc))]
         c = corr(pairs)
-        L.append(f"  1. Vol persistence corr = {c:+.2f} (n={len(pairs)}).")
-        by = defaultdict(list)
-        for prior, nxt in pairs:
-            by[band(prior)].append(nxt)
-        for k in ("LOW", "NORMAL", "HIGH"):
-            if by[k]:
-                L.append(f"       after {k:<6} next range {st.mean(by[k]):5.1f}c  n={len(by[k])}")
-        L.append("     A vol filter needs this gap to be wide. It is not.")
-    liquid = sorted(data, key=lambda s: pct_wrong(data[s]))
-    if len(liquid) > 1:
-        L.append(f"  2. Opening print is informative only on {liquid[0]} "
-                 f"({pct_wrong(data[liquid[0]]):.0f}% wrong) vs "
-                 f"{pct_wrong(data[liquid[-1]]):.0f}% on {liquid[-1]} — a coin flip.")
-    if len(btc) >= 40:
-        decided = sum(1 for r in btc if r["first"] < 10 or r["first"] > 90)
-        L.append(f"  3. {100*decided/len(btc):.0f}% of BTC windows are effectively decided at the open.")
-
+        if c is not None:
+            L.append(f"   Volatility does not predict the next window (correlation {c:+.2f}).")
+    others = [k for k in sorted(data) if k != "KXBTC15M"]
+    if others:
+        avg = st.mean([pct_wrong(data[k]) for k in others])
+        L.append(f"   ETH, SOL and XRP opening prices are wrong {avg:.0f}% of the time - coin flips.")
     L.append("")
-    L.append("Every figure above is in-sample and excludes fees. Not advice.")
-    L.append("  python3 analyze.py | python3 query.py \"SELECT ...\"")
 
-    subject = ("Kalshi recorder — OK" if not problems
-               else f"Kalshi recorder — ATTENTION ({len(problems)})") + f" · {total} windows"
+    # --------------------------------------------------------------- footer
+    L.append(f"{total} windows recorded, {fmt_bytes(used)} used"
+             f"{'' if used/MAX_BYTES < 0.5 else f' ({used/MAX_BYTES*100:.0f}% of ceiling)'}.")
+    L.append("Figures are in-sample and exclude fees - not advice.")
+    L.append("Detail: python3 analyze.py   |   python3 query.py \"SELECT ...\"")
+
+    head = "NEEDS ATTENTION" if problems else "OK"
+    subject = f"BTC 15m recorder - {head}"
+    if btc and not problems:
+        reg = regime_series(btc)
+        subject += f" - vol {reg[-1][2]} {reg[-1][1]:.0f}c" if len(reg) else ""
     return subject, "\n".join(L)
+
 
 def main():
     subject, body = build()
