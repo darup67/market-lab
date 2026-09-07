@@ -1,0 +1,9 @@
+# Logs are noise; the dataset is the point.
+*.log
+.lock
+.DS_Store
+__pycache__/
+
+# NOTE: data/*.jsonl is deliberately NOT ignored. Kalshi only serves ~2 days of
+# settled markets, so these rows cannot be regenerated once they age out —
+# committing them is the only thing that makes the history durable.

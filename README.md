@@ -1,0 +1,91 @@
+# Kalshi 15-minute lab
+
+A durable record of Kalshi's 15-minute crypto contracts, and tests over it.
+
+**Why it exists:** Kalshi serves roughly the last **two days** of settled
+markets, and trades vanish with them. Any question about these contracts that
+needs more history than that can only be answered by data captured as it goes
+past. Nothing here can be backfilled later — which is why `data/*.jsonl` is
+committed rather than ignored.
+
+```
+KXBTC15M   BTC price up in next 15 mins?     ~8,000 trades/window
+KXETH15M   ETH                               ~4,800
+KXXRP15M   XRP                               ~2,800
+KXSOL15M   SOL                               ~2,400
+```
+
+## Capture
+
+```bash
+node record.js              # every new settled window, all four series
+node record.js --status     # how much history is on disk
+node record.js --series KXETH15M
+```
+
+Runs every 10 minutes under `com.dhruv.kalshi15m`. Windows settle every 15
+minutes and the API retains ~2 days of them, so several consecutive failures
+still recover on the next success.
+
+**Append-only and idempotent.** Rows are keyed by window ticker; a re-run adds
+nothing. Verified: a second run reported `796 already had`.
+
+Each row carries the settlement, the opening and closing prints, min/max/range,
+quartile prices, and a 15-point downsampled path — enough to reconstruct how a
+window resolved without storing 8,000 raw trades.
+
+```json
+{"series":"KXBTC15M","window":"26SEP071130","target":79054.02,
+ "settled_yes":false,"trades":10000,"first":73,"last":0.1,
+ "min":0.1,"max":85,"range":84.9,"q25":61,"q50":31,"q75":11,
+ "path":[73,75,77,68,61,36,29,31,27,29,...]}
+```
+
+That row is a good example of why the path matters: it opened at 73¢ — the
+market leaning YES — and settled NO.
+
+## Analysis
+
+```bash
+python3 analyze.py            # all series
+python3 analyze.py KXBTC15M
+```
+
+Stdlib only, no dependencies. Every proportion is reported with a **95%
+confidence interval**, because small samples lie confidently without one.
+
+### What the first 201 BTC windows say
+
+| | |
+|---|---|
+| Base rate | 46.8% YES  [40%, 54%] |
+| Opening print wrong | 17%  [13%, 23%] |
+| ...when it opens <10¢ or >90¢ | 10% |
+| ...when it opens 35–65¢ | 30% |
+| Effectively decided at the open | 31% |
+| Vol persistence, corr(prior hour, next window) | **+0.14** |
+
+**The vol-persistence number is the load-bearing one.** A LOW/NORMAL/HIGH
+volatility filter is only useful if a calm hour predicts a calm next window.
+At +0.14 it barely does: after LOW the next window averages 37.1¢ of range,
+after NORMAL 40.5¢. That gap is thin. Only HIGH separates meaningfully (48.8¢).
+
+So the volatility index in the sibling `flip-notifier` repo is sound as
+*context* — it accurately describes what just happened — but the data does not
+support treating it as a *signal*.
+
+## What this is not
+
+Not a strategy, and a passing statistic here is not an edge:
+
+- **Every number is in-sample.** Fitting bands to the same data you evaluate on
+  is how you find patterns that do not survive.
+- **You cannot trade the opening print.** It is the first execution — already
+  gone by the time you see it.
+- **Fees are not modelled.** On 15-minute contracts traded frequently they
+  would consume an edge far larger than anything visible here.
+- **The sample is short.** 201 windows is about two days, and one of those was
+  a US market holiday with thin crypto liquidity.
+
+The honest use of this repo is to accumulate enough history that a question can
+be asked out-of-sample. That takes weeks, not days.
