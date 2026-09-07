@@ -16,6 +16,14 @@
     <key>Hour</key><integer>7</integer>
     <key>Minute</key><integer>0</integer>
   </dict>
+  <!-- launchd starts with PATH=/usr/bin:/bin:/usr/sbin:/sbin, which omits
+       /usr/local/bin. git then cannot find git-credential-osxkeychain and every
+       autocommit push failed auth, and report.py could not find node to send
+       mail. Both failed silently under launchd while working by hand. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/Users/dhruvpatel/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
   <key>WorkingDirectory</key><string>/Users/dhruvpatel/kalshi-15m-lab</string>
   <key>StandardOutPath</key><string>/Users/dhruvpatel/kalshi-15m-lab/report.out.log</string>
   <key>StandardErrorPath</key><string>/Users/dhruvpatel/kalshi-15m-lab/report.err.log</string>

@@ -34,6 +34,17 @@ the remote permanently stale, so a disk failure would lose everything since
 whoever last remembered to commit. For data that cannot be backfilled, a remote
 that only updates by hand is not a backup.
 
+**launchd needs an explicit PATH.** It starts jobs with
+`/usr/bin:/bin:/usr/sbin:/sbin`, which omits `/usr/local/bin` — so `git` could
+not find `git-credential-osxkeychain` and every scheduled push failed auth,
+while pushes by hand worked fine. `report.py` had the same problem finding
+`node`. Both plists now set PATH explicitly. This class of bug is invisible
+from a terminal; it only appears under the scheduler.
+
+The push also runs whenever anything is unpushed, not only when a run captured
+rows — otherwise a push that failed earlier would sit until the next run that
+happened to capture something, leaving the only copy of a window on one disk.
+
 It is best-effort by design: a failed push is logged and the run still succeeds,
 because losing the next window to a network blip is worse than a remote that is
 briefly behind. The commit is already local, so the next run pushes both.

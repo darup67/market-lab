@@ -13,6 +13,14 @@
        recover on the next success rather than losing data. -->
   <key>StartInterval</key><integer>600</integer>
   <key>RunAtLoad</key><true/>
+  <!-- launchd starts with PATH=/usr/bin:/bin:/usr/sbin:/sbin, which omits
+       /usr/local/bin. git then cannot find git-credential-osxkeychain and every
+       autocommit push failed auth, and report.py could not find node to send
+       mail. Both failed silently under launchd while working by hand. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/Users/dhruvpatel/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
   <key>WorkingDirectory</key><string>/Users/dhruvpatel/kalshi-15m-lab</string>
   <key>StandardOutPath</key><string>/Users/dhruvpatel/kalshi-15m-lab/launchd.out.log</string>
   <key>StandardErrorPath</key><string>/Users/dhruvpatel/kalshi-15m-lab/launchd.err.log</string>

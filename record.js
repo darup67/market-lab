@@ -274,27 +274,36 @@ function git(cmdArgs, timeout = 45000) {
  * than a remote that is briefly behind. The next run pushes both.
  */
 async function persist(added) {
-  if (!AUTOCOMMIT || !added) return;
+  if (!AUTOCOMMIT) return;
 
-  const status = await git(['status', '--porcelain', 'data']);
-  if (!status.ok) { log(`autocommit: git status failed — ${status.err}`); return; }
-  if (!status.out) return;                       // nothing actually changed on disk
+  if (added) {
+    const status = await git(['status', '--porcelain', 'data']);
+    if (!status.ok) { log(`autocommit: git status failed — ${status.err}`); return; }
+    if (status.out) {
+      const add = await git(['add', 'data']);
+      if (!add.ok) { log(`autocommit: git add failed — ${add.err}`); return; }
+      const commit = await git(['-c', 'user.name=kalshi-recorder',
+                                '-c', 'user.email=recorder@localhost',
+                                'commit', '-q', '-m', `data: +${added} window(s)`]);
+      if (!commit.ok) { log(`autocommit: commit failed — ${commit.err}`); return; }
+    }
+  }
 
-  const add = await git(['add', 'data']);
-  if (!add.ok) { log(`autocommit: git add failed — ${add.err}`); return; }
-
-  const commit = await git(['-c', 'user.name=kalshi-recorder',
-                            '-c', 'user.email=recorder@localhost',
-                            'commit', '-q', '-m', `data: +${added} window(s)`]);
-  if (!commit.ok) { log(`autocommit: commit failed — ${commit.err}`); return; }
+  // Push whenever anything is unpushed, NOT only when this run captured rows.
+  // A push that failed earlier (bad PATH, network down) would otherwise sit
+  // until the next run that happened to capture something — so a quiet market
+  // could leave the only copy of a window on one disk for hours.
+  const ahead = await git(['rev-list', '--count', '@{u}..HEAD']);
+  if (!ahead.ok) return;                       // no upstream configured — nothing to do
+  const n = Number(ahead.out || 0);
+  if (!n) return;
 
   const push = await git(['push', '-q', 'origin', 'HEAD']);
   if (!push.ok) {
-    // Committed locally, so nothing is lost — the next run carries both.
-    log(`autocommit: committed but push failed (will retry next run) — ${push.err.slice(0, 160)}`);
+    log(`autocommit: ${n} commit(s) unpushed, push failed (retries next run) — ${push.err.slice(0, 140)}`);
     return;
   }
-  log(`autocommit: pushed +${added} window(s)`);
+  log(`autocommit: pushed ${n} commit(s)`);
 }
 
 /* ------------------------------------------------------------------- main */
