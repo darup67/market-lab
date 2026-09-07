@@ -19,6 +19,7 @@
 
 import { readFileSync, writeFileSync, existsSync, appendFileSync, mkdirSync,
          statSync, openSync, closeSync, writeSync, unlinkSync } from 'node:fs';
+import { execFile } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -45,6 +46,17 @@ const PATH_POINTS     = 15;    // downsampled path — one point per minute
 // failing agent, and warns on approach rather than only on arrival.
 const MAX_BYTES  = Number(process.env.KLAB_MAX_BYTES) || 5 * 1024 ** 3;
 const WARN_AT    = 0.8;
+
+// Commit and push new rows automatically.
+//
+// This data cannot be backfilled, and the recorder appends every 10 minutes —
+// so left to manual commits the working tree is permanently dirty and the
+// remote permanently stale. A disk failure would then lose everything since
+// whenever someone last remembered. Auto-committing makes the private remote a
+// real backup rather than a periodic snapshot.
+//
+// Set KLAB_AUTOCOMMIT=0 to record locally and commit by hand instead.
+const AUTOCOMMIT = process.env.KLAB_AUTOCOMMIT !== '0';
 
 const args = new Set(process.argv.slice(2));
 const argVal = f => { const a = process.argv.slice(2); const i = a.indexOf(f); return i >= 0 ? a[i+1] : null; };
@@ -242,6 +254,49 @@ async function captureSeries(series) {
   return { added, skipped: markets.length - todo.length, failed };
 }
 
+/** Run a git command; never throws — a git problem must not break capture. */
+function git(cmdArgs, timeout = 45000) {
+  return new Promise(resolve => {
+    execFile('git', cmdArgs, { cwd: HERE, timeout, killSignal: 'SIGKILL' },
+      (err, stdout, stderr) => resolve({
+        ok: !err,
+        out: (stdout || '').trim(),
+        err: (stderr || err?.message || '').trim(),
+      }));
+  });
+}
+
+/**
+ * Persist newly captured rows to the private remote.
+ *
+ * Deliberately best-effort: a failed push is logged and the run still succeeds,
+ * because losing the next window to a network blip would be a worse outcome
+ * than a remote that is briefly behind. The next run pushes both.
+ */
+async function persist(added) {
+  if (!AUTOCOMMIT || !added) return;
+
+  const status = await git(['status', '--porcelain', 'data']);
+  if (!status.ok) { log(`autocommit: git status failed — ${status.err}`); return; }
+  if (!status.out) return;                       // nothing actually changed on disk
+
+  const add = await git(['add', 'data']);
+  if (!add.ok) { log(`autocommit: git add failed — ${add.err}`); return; }
+
+  const commit = await git(['-c', 'user.name=kalshi-recorder',
+                            '-c', 'user.email=recorder@localhost',
+                            'commit', '-q', '-m', `data: +${added} window(s)`]);
+  if (!commit.ok) { log(`autocommit: commit failed — ${commit.err}`); return; }
+
+  const push = await git(['push', '-q', 'origin', 'HEAD']);
+  if (!push.ok) {
+    // Committed locally, so nothing is lost — the next run carries both.
+    log(`autocommit: committed but push failed (will retry next run) — ${push.err.slice(0, 160)}`);
+    return;
+  }
+  log(`autocommit: pushed +${added} window(s)`);
+}
+
 /* ------------------------------------------------------------------- main */
 
 async function main() {
@@ -296,6 +351,7 @@ async function main() {
     if (r.added) log(`${s}: +${r.added} window(s)`);
   }
   log(`recorded ${added} new, ${skipped} already had, ${failed} failed`);
+  await persist(added);
   if (failed && !added) process.exitCode = 1;
 }
 

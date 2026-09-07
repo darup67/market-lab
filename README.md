@@ -27,6 +27,17 @@ Runs every 10 minutes under `com.dhruv.kalshi15m`. Windows settle every 15
 minutes and the API retains ~2 days of them, so several consecutive failures
 still recover on the next success.
 
+**Auto-committed.** New rows are committed and pushed to the private remote on
+the run that captures them (`KLAB_AUTOCOMMIT=0` to disable). Without this the
+working tree is permanently dirty — the recorder appends every 10 minutes — and
+the remote permanently stale, so a disk failure would lose everything since
+whoever last remembered to commit. For data that cannot be backfilled, a remote
+that only updates by hand is not a backup.
+
+It is best-effort by design: a failed push is logged and the run still succeeds,
+because losing the next window to a network blip is worse than a remote that is
+briefly behind. The commit is already local, so the next run pushes both.
+
 **Append-only and idempotent.** Rows are keyed by window ticker; a re-run adds
 nothing. Verified: a second run reported `796 already had`.
 
