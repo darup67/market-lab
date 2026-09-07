@@ -121,6 +121,122 @@ def pct_wrong(rows):
         return None
     return 100.0 * sum(1 for r in rows if (r["first"] > 50) != r["settled_yes"]) / len(rows)
 
+
+# --- futures indicators -----------------------------------------------------
+# Every figure here is normalised. NQ trades near 29,500 and CL near 91, so an
+# absolute range says nothing comparable; percentages and each contract's own
+# percentile do.
+FUT_SESSION = 26          # bars ~= one 6.5h US cash session at 15m
+
+def load_futures():
+    out = {}
+    for f in sorted(glob.glob(os.path.join(HERE, "data", "futures", "*.jsonl"))):
+        rows = []
+        for line in open(f):
+            if not line.strip():
+                continue
+            try:
+                rows.append(json.loads(line))
+            except Exception:
+                continue
+        if rows:
+            rows.sort(key=lambda r: r["t"])
+            out[rows[0]["sym"]] = rows
+    return out
+
+def _vwap(bars):
+    num = den = 0.0
+    for b in bars:
+        v = b.get("v") or 0
+        tp = (b["h"] + b["l"] + b["c"]) / 3
+        num += tp * v; den += v
+    return num / den if den else None
+
+def _realised_vol(bars):
+    """Stdev of per-bar log returns, as a percent. Scale-free by construction."""
+    import math
+    rets = []
+    for a, b in zip(bars, bars[1:]):
+        if a["c"] > 0 and b["c"] > 0:
+            rets.append(math.log(b["c"] / a["c"]))
+    return st.pstdev(rets) * 100 if len(rets) > 2 else None
+
+def _atr(bars, n=14):
+    trs = []
+    for a, b in zip(bars, bars[1:]):
+        trs.append(max(b["h"] - b["l"], abs(b["h"] - a["c"]), abs(b["l"] - a["c"])))
+    return st.mean(trs[-n:]) if len(trs) >= 2 else None
+
+def futures_block(fut):
+    """
+    One block per contract, sorted by how unusual its volatility is right now —
+    so whatever is actually moving sits at the top rather than in whatever order
+    the files happened to load.
+    """
+    if not fut:
+        return []
+    rows = []
+    for sym, bars in fut.items():
+        if len(bars) < FUT_SESSION + 2:
+            continue
+        sess = bars[-FUT_SESSION:]
+        vol  = _realised_vol(sess)
+        if vol is None:
+            continue
+
+        # Regime from this contract's OWN history, not a shared threshold.
+        hist = []
+        for i in range(FUT_SESSION, len(bars) + 1):
+            v = _realised_vol(bars[i - FUT_SESSION:i])
+            if v is not None:
+                hist.append(v)
+        pct = 100.0 * sum(1 for h in hist if h <= vol) / len(hist) if hist else None
+        band = ("HIGH" if pct is not None and pct >= 80 else
+                "LOW"  if pct is not None and pct <= 20 else "NORMAL")
+
+        last = sess[-1]["c"]
+        vw   = _vwap(sess)
+        atr  = _atr(sess)
+        chg  = (last / sess[0]["c"] - 1) * 100 if sess[0]["c"] else None
+        vols = [b.get("v") or 0 for b in sess]
+        vratio = (vols[-1] / st.mean(vols)) if st.mean(vols) else None
+        age_h = (datetime.now(timezone.utc).timestamp() - sess[-1]["t"]) / 3600
+        rows.append(dict(sym=sym, name=bars[0]["name"], last=last, chg=chg, vol=vol,
+                         pct=pct, band=band, vw=vw, atr=atr, vratio=vratio, age=age_h,
+                         nbars=len(bars), nhist=len(hist)))
+
+    rows.sort(key=lambda r: -(r["pct"] or 0))     # most unusual first
+
+    def ordinal(n):
+        n = int(round(n))
+        suf = "th" if 11 <= n % 100 <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+        return f"{n}{suf}"
+
+    L = ["FUTURES  (15-min bars, ~10 min delayed - research data, not signals)"]
+    for r in rows:
+        vwd = (r["last"] / r["vw"] - 1) * 100 if r["vw"] else None
+        # Round before signing, so a -0.004% move prints 0.00% rather than -0.00%.
+        chg = 0.0 if r["chg"] is None else round(r["chg"], 2) + 0.0
+        head = f"   {r['sym']:<5} {r['name']:<11} {r['last']:>10,.2f}"
+        L.append(head + (f"  {chg:+.2f}% session" if r["chg"] is not None else ""))
+        L.append(f"         vol {r['vol']:.3f}%/bar  {r['band']} ({ordinal(r['pct'])} pct of own history)")
+        if vwd is not None:
+            side = "above" if vwd >= 0 else "below"
+            L.append(f"         VWAP {r['vw']:>10,.2f}   price {abs(vwd):.2f}% {side}")
+        if r["atr"] is not None:
+            L.append(f"         ATR {r['atr']:>11,.2f}   volume {r['vratio']:.1f}x session avg"
+                     if r["vratio"] else f"         ATR {r['atr']:>11,.2f}")
+    oldest_note = max((r["age"] for r in rows), default=0)
+    if oldest_note > 3:
+        L.append(f"   (newest bar {oldest_note:.0f}h old - market closed)")
+    if rows:
+        eff = rows[0]["nbars"] // FUT_SESSION
+        if eff < 40:
+            L.append(f"   Percentiles rest on ~{eff} independent sessions of history - treat")
+            L.append(f"   the bands as provisional until roughly two weeks have accumulated.")
+    L.append("")
+    return L
+
 def build():
     """
     A morning email, not a dashboard dump.
@@ -233,23 +349,7 @@ def build():
                      f"Say \"fire Chronos on the Kalshi data\".")
         L.append("")
 
-    # One line for futures — enough to notice it has stopped, not enough to
-    # compete with BTC for attention.
-    fut = sorted(glob.glob(os.path.join(HERE, "data", "futures", "*.jsonl")))
-    if fut:
-        bars = 0; newest = 0
-        for f in fut:
-            for line in open(f):
-                if line.strip():
-                    try:
-                        t = json.loads(line)["t"]; bars += 1
-                        newest = max(newest, t)
-                    except Exception:
-                        pass
-        age_h = (now.timestamp() - newest) / 3600 if newest else None
-        L.append(f"Futures: {bars} bars across {len(fut)} contracts"
-                 + (f", newest {age_h:.0f}h old." if age_h is not None else "."))
-        L.append("")
+    L.extend(futures_block(load_futures()))
 
     # --------------------------------------------------------------- footer
     L.append(f"{total} windows recorded, {fmt_bytes(used)} used"

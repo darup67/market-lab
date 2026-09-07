@@ -254,6 +254,45 @@ that was running fine. Those labels are **Eastern** — that window's `close_tim
 is `15:30Z`. The check now keys on `close_time`, which is explicit ISO UTC and
 needs no decoding.
 
+### Futures in the daily email
+
+One block per contract, **sorted by how unusual its volatility is right now**, so
+whatever is actually moving sits at the top rather than in file order:
+
+```
+FUTURES  (15-min bars, ~10 min delayed - research data, not signals)
+   YM=F  Dow          53,440.00  +0.00% session
+         vol 0.098%/bar  HIGH (87th pct of own history)
+         VWAP  53,418.87   price 0.04% above
+         ATR       53.93   volume 0.2x session avg
+```
+
+**Every figure is normalised, and that is not cosmetic.** NQ trades near 29,500
+and CL near 91 — an absolute range or ATR says nothing comparable across them.
+So volatility is percent-per-bar, VWAP distance is a percentage, and the regime
+is each contract's **own percentile** rather than a shared threshold. Gold at
+0.115%/bar is unremarkable; the S&P at that level would be violent.
+
+| Field | What it is |
+|---|---|
+| session | change over the trailing 26 bars (~one 6.5h cash session) |
+| vol | stdev of per-bar log returns, as a percent — scale-free |
+| regime | percentile of that vol within this contract's own history (≤20 LOW, ≥80 HIGH) |
+| VWAP | volume-weighted average over the session, and how far price sits from it |
+| ATR | average true range, in the contract's own points |
+| volume | last bar against the session mean |
+
+**On the percentiles.** They are computed from rolling 26-bar windows, which
+overlap almost entirely — 319 readings from 344 bars carry nowhere near 319
+windows of information. The email reports the honest number instead:
+
+```
+Percentiles rest on ~13 independent sessions of history - treat
+the bands as provisional until roughly two weeks have accumulated.
+```
+
+That note disappears on its own once ~40 independent sessions exist.
+
 ## Chronos-test reminder
 
 The daily email carries a quiet countdown:
