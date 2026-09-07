@@ -75,6 +75,39 @@ def gaps(rows):
         cur += timedelta(minutes=15)
     return missing, expected
 
+
+# --- regime, computed from our own data so the email never disagrees with the
+# --- dataset it ships. Same bands and 4-window smoothing the notifier uses.
+VOL_W, VOL_LOW, VOL_HIGH = 4, 28, 52
+
+def band(v):
+    return "LOW" if v < VOL_LOW else "HIGH" if v > VOL_HIGH else "NORMAL"
+
+def regime_series(rows):
+    """Rolling 4-window mean range, oldest first, paired with its window."""
+    out = []
+    for i in range(VOL_W, len(rows) + 1):
+        idx = st.mean([r["range"] for r in rows[i-VOL_W:i]])
+        out.append((rows[i-1], idx, band(idx)))
+    return out
+
+def corr(pairs):
+    if len(pairs) < 10:
+        return None
+    xs = [a for a, _ in pairs]; ys = [b for _, b in pairs]
+    mx, my = st.mean(xs), st.mean(ys)
+    den = (sum((x-mx)**2 for x in xs) * sum((y-my)**2 for y in ys)) ** 0.5
+    return None if den == 0 else sum((x-mx)*(y-my) for x, y in pairs) / den
+
+def wilson(k, n):
+    if n == 0:
+        return (0.0, 1.0)
+    p, z = k / n, 1.96
+    d = 1 + z*z/n
+    c = (p + z*z/(2*n)) / d
+    h = z * ((p*(1-p)/n + z*z/(4*n*n)) ** 0.5) / d
+    return (max(0, c-h), min(1, c+h))
+
 def pct_wrong(rows):
     if not rows:
         return None
@@ -141,16 +174,73 @@ def build():
                  f"{pct_wrong(rows):>11.1f}%")
 
     btc = data.get("KXBTC15M", [])
-    if len(btc) > 8:
-        W = 4
-        pairs = [(sum(r["range"] for r in btc[i-W:i])/W, btc[i]["range"]) for i in range(W, len(btc))]
-        xs = [a for a, _ in pairs]; ys = [b for _, b in pairs]
-        mx, my = st.mean(xs), st.mean(ys)
-        den = (sum((x-mx)**2 for x in xs) * sum((y-my)**2 for y in ys)) ** 0.5
-        corr = (sum((x-mx)*(y-my) for x, y in pairs) / den) if den else 0
+
+    # ---------------------------------------------------------- REGIME
+    if len(btc) > VOL_W:
+        reg = regime_series(btc)
+        cur_row, cur_idx, cur_band = reg[-1]
         L.append("")
-        L.append(f"  BTC vol persistence corr(prior hour, next window) = {corr:+.2f}  n={len(pairs)}")
-        L.append("  near zero means a calm hour does not predict a calm next window")
+        L.append("BTC VOLATILITY REGIME")
+        L.append(f"  now        {cur_band}  {cur_idx:.1f}c   (LOW <{VOL_LOW}c · NORMAL {VOL_LOW}-{VOL_HIGH}c · HIGH >{VOL_HIGH}c)")
+
+        last8 = reg[-8:]
+        L.append("  last 2h    " + " ".join(f"{i:.0f}" for _, i, _ in last8) + "c")
+        L.append("             " + " ".join({"LOW":" L","NORMAL":" ~","HIGH":" H"}[b] for _, _, b in last8))
+
+        day = [(r, i, b) for r, i, b in reg if (wtime(r) or day_ago) > day_ago]
+        if day:
+            cnt = {"LOW": 0, "NORMAL": 0, "HIGH": 0}
+            for _, _, b in day:
+                cnt[b] += 1
+            tot = len(day)
+            L.append("  24h split  " + "  ".join(f"{k} {100*v/tot:.0f}%" for k, v in cnt.items()))
+            trans = sum(1 for a, b in zip(day, day[1:]) if a[2] != b[2])
+            L.append(f"             {trans} band change(s) in 24h")
+
+    # ------------------------------------------------------- INDICATORS
+    if len(btc) >= 40:
+        L.append("")
+        L.append("BTC INDICATORS")
+        cal = defaultdict(list)
+        for r in btc:
+            cal[min(9, int(r["first"] // 10))].append(r["settled_yes"])
+        L.append("  calibration — opening print vs outcome")
+        for k in sorted(cal):
+            g = cal[k]
+            lo, hi = wilson(sum(g), len(g))
+            bar = "#" * round(sum(g) / len(g) * 20)
+            L.append(f"    {k*10:>3}-{k*10+9:<3}{len(g):>4}  {100*sum(g)/len(g):>3.0f}% YES "
+                     f"[{lo*100:>3.0f},{hi*100:>3.0f}]  {bar}")
+
+        rev = [r for r in btc if (r["first"] > 50) != r["settled_yes"]]
+        big = sorted(btc, key=lambda r: -r["range"])[:3]
+        L.append(f"  reversals        {len(rev)}/{len(btc)} = {100*len(rev)/len(btc):.0f}% of windows")
+        L.append("  widest windows   " + ", ".join(
+            f"{r['window']} {r['first']:.0f}->{r['last']:.0f}c" for r in big))
+
+    # --------------------------------------------------------- FINDINGS
+    L.append("")
+    L.append("FINDINGS  (recomputed each morning — these age with the data)")
+    if len(btc) > VOL_W + 10:
+        pairs = [(st.mean([x["range"] for x in btc[i-VOL_W:i]]), btc[i]["range"])
+                 for i in range(VOL_W, len(btc))]
+        c = corr(pairs)
+        L.append(f"  1. Vol persistence corr = {c:+.2f} (n={len(pairs)}).")
+        by = defaultdict(list)
+        for prior, nxt in pairs:
+            by[band(prior)].append(nxt)
+        for k in ("LOW", "NORMAL", "HIGH"):
+            if by[k]:
+                L.append(f"       after {k:<6} next range {st.mean(by[k]):5.1f}c  n={len(by[k])}")
+        L.append("     A vol filter needs this gap to be wide. It is not.")
+    liquid = sorted(data, key=lambda s: pct_wrong(data[s]))
+    if len(liquid) > 1:
+        L.append(f"  2. Opening print is informative only on {liquid[0]} "
+                 f"({pct_wrong(data[liquid[0]]):.0f}% wrong) vs "
+                 f"{pct_wrong(data[liquid[-1]]):.0f}% on {liquid[-1]} — a coin flip.")
+    if len(btc) >= 40:
+        decided = sum(1 for r in btc if r["first"] < 10 or r["first"] > 90)
+        L.append(f"  3. {100*decided/len(btc):.0f}% of BTC windows are effectively decided at the open.")
 
     L.append("")
     L.append("Every figure above is in-sample and excludes fees. Not advice.")

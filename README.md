@@ -128,7 +128,7 @@ others are not really priced at all.
 
 ## Daily report
 
-An email lands at **07:00 local** each morning (`com.dhruv.kalshi15m.report`) at
+An email lands at **07:00 Eastern** each morning (`com.dhruv.kalshi15m.report`) at
 darup67@gmail.com. It reuses `~/flip-notifier/send-email.js` and the same
 Keychain app password, so there is no second credential to manage.
 
@@ -147,13 +147,39 @@ verdict (`OK` / `ATTENTION (n)`) and the body opens with any problems:
 - nothing captured in 24h
 - storage past 80% of the ceiling
 
-Then capture volume, storage against the ceiling, and the readings refreshed
-across the whole dataset so the numbers age with the data rather than being
-quoted from a README.
+Then, in order:
+
+- **CAPTURE** — windows added, storage against the ceiling, years remaining
+- **READINGS** — per-series range, YES rate and opening-print accuracy
+- **BTC VOLATILITY REGIME** — current band and index, the last 2h as a sparkline,
+  the 24h split across LOW/NORMAL/HIGH, and how many times the band changed
+- **BTC INDICATORS** — the calibration curve with confidence intervals and an
+  ASCII bar, reversal rate, and the widest windows
+- **FINDINGS** — the durable conclusions, **recomputed every morning** so they
+  age with the data instead of being quoted from a README that went stale
+
+The regime is computed from this repo's own rows using the same 4-window
+smoothing and 28¢/52¢ bands as the notifier, so the email can never disagree
+with the dataset it ships.
+
+```
+BTC VOLATILITY REGIME
+  now        NORMAL  32.8c   (LOW <28c · NORMAL 28-52c · HIGH >52c)
+  last 2h    54 39 37 46 31 32 43 33c
+              H  ~  ~  ~  ~  ~  ~  ~
+  24h split  LOW 21%  NORMAL 52%  HIGH 27%
+             28 band change(s) in 24h
+```
+
+That last line is itself a finding: **28 band changes in a day** means the
+regime is unstable at this smoothing, which is the same story the +0.14
+persistence correlation tells.
 
 Scheduled with `StartCalendarInterval`, which launchd reads in the machine's
-timezone — it tracks EDT/EST automatically instead of drifting an hour at each
-changeover. If the Mac is asleep at 07:00 the run happens on wake.
+timezone. That means **07:00 EDT in summer and 07:00 EST in winter** — the
+clock time you actually want. Pinning it to a fixed UTC-5 would deliver at
+08:00 for most of the year instead. If the Mac is asleep at 07:00, launchd runs
+it on wake.
 
 ### One bug worth recording
 
