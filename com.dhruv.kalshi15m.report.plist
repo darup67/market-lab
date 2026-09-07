@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.dhruv.kalshi15m.report</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/dhruvpatel/kalshi-15m-lab/report.py</string>
+  </array>
+  <!-- 07:00 local. launchd reads this in the machine's timezone, so it tracks
+       EDT/EST automatically rather than drifting an hour at each changeover.
+       If the Mac is asleep at 07:00, launchd runs it on wake. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>7</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+  <key>WorkingDirectory</key><string>/Users/dhruvpatel/kalshi-15m-lab</string>
+  <key>StandardOutPath</key><string>/Users/dhruvpatel/kalshi-15m-lab/report.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/dhruvpatel/kalshi-15m-lab/report.err.log</string>
+</dict>
+</plist>

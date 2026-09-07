@@ -126,6 +126,43 @@ opening print is wrong 17% of the time; the other three are wrong ~45%** — a
 coin flip. BTC's book is deep enough to price the window at the open; the
 others are not really priced at all.
 
+## Daily report
+
+An email lands at **07:00 local** each morning (`com.dhruv.kalshi15m.report`) at
+darup67@gmail.com. It reuses `~/flip-notifier/send-email.js` and the same
+Keychain app password, so there is no second credential to manage.
+
+```bash
+python3 report.py --dry     # print it, send nothing
+python3 report.py           # build and send
+```
+
+**It leads with health, not statistics.** The failure that matters here is
+silent — Kalshi keeps ~2 days of settled markets, so a stopped recorder loses
+history permanently rather than falling behind. So the subject line carries the
+verdict (`OK` / `ATTENTION (n)`) and the body opens with any problems:
+
+- newest window more than 2h old — the recorder may have stopped
+- missing 15-minute slots inside the range already held
+- nothing captured in 24h
+- storage past 80% of the ceiling
+
+Then capture volume, storage against the ceiling, and the readings refreshed
+across the whole dataset so the numbers age with the data rather than being
+quoted from a README.
+
+Scheduled with `StartCalendarInterval`, which launchd reads in the machine's
+timezone — it tracks EDT/EST automatically instead of drifting an hour at each
+changeover. If the Mac is asleep at 07:00 the run happens on wake.
+
+### One bug worth recording
+
+The staleness check originally decoded the window label (`26SEP071130`) as UTC
+and reported every series **four hours stale**, crying wolf about a recorder
+that was running fine. Those labels are **Eastern** — that window's `close_time`
+is `15:30Z`. The check now keys on `close_time`, which is explicit ISO UTC and
+needs no decoding.
+
 ## Analysis
 
 ```bash
