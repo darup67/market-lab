@@ -136,7 +136,7 @@ def build():
     """
     data = load()
     if not data:
-        return "BTC 15m recorder — NO DATA", "data/ is empty. Is com.dhruv.kalshi15m loaded?"
+        return "BTC 15m recorder — NO DATA", "data/ is empty. Is com.dhruv.marketlab loaded?"
 
     now      = datetime.now(timezone.utc)
     day_ago  = now - timedelta(hours=24)
@@ -231,6 +231,24 @@ def build():
         else:
             L.append(f"Chronos test: READY - {len(btc)} windows. "
                      f"Say \"fire Chronos on the Kalshi data\".")
+        L.append("")
+
+    # One line for futures — enough to notice it has stopped, not enough to
+    # compete with BTC for attention.
+    fut = sorted(glob.glob(os.path.join(HERE, "data", "futures", "*.jsonl")))
+    if fut:
+        bars = 0; newest = 0
+        for f in fut:
+            for line in open(f):
+                if line.strip():
+                    try:
+                        t = json.loads(line)["t"]; bars += 1
+                        newest = max(newest, t)
+                    except Exception:
+                        pass
+        age_h = (now.timestamp() - newest) / 3600 if newest else None
+        L.append(f"Futures: {bars} bars across {len(fut)} contracts"
+                 + (f", newest {age_h:.0f}h old." if age_h is not None else "."))
         L.append("")
 
     # --------------------------------------------------------------- footer

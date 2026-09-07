@@ -2,11 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>com.dhruv.kalshi15m.report</string>
+  <key>Label</key><string>com.dhruv.marketlab.report</string>
   <key>ProgramArguments</key>
   <array>
     <string>/usr/bin/python3</string>
-    <string>/Users/dhruvpatel/kalshi-15m-lab/report.py</string>
+    <string>/Users/dhruvpatel/market-lab/report.py</string>
   </array>
   <!-- 07:00 local. launchd reads this in the machine's timezone, so it tracks
        EDT/EST automatically rather than drifting an hour at each changeover.
@@ -24,8 +24,8 @@
   <dict>
     <key>PATH</key><string>/Users/dhruvpatel/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
   </dict>
-  <key>WorkingDirectory</key><string>/Users/dhruvpatel/kalshi-15m-lab</string>
-  <key>StandardOutPath</key><string>/Users/dhruvpatel/kalshi-15m-lab/report.out.log</string>
-  <key>StandardErrorPath</key><string>/Users/dhruvpatel/kalshi-15m-lab/report.err.log</string>
+  <key>WorkingDirectory</key><string>/Users/dhruvpatel/market-lab</string>
+  <key>StandardOutPath</key><string>/Users/dhruvpatel/market-lab/report.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/dhruvpatel/market-lab/report.err.log</string>
 </dict>
 </plist>

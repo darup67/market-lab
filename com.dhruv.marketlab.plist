@@ -2,11 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>com.dhruv.kalshi15m</string>
+  <key>Label</key><string>com.dhruv.marketlab</string>
   <key>ProgramArguments</key>
   <array>
     <string>/Users/dhruvpatel/.local/bin/node</string>
-    <string>/Users/dhruvpatel/kalshi-15m-lab/record.js</string>
+    <string>/Users/dhruvpatel/market-lab/record.js</string>
   </array>
   <!-- Windows settle every 15 min and Kalshi keeps ~2 days of them, so a
        10-minute tick has plenty of margin: several consecutive failures still
@@ -21,8 +21,8 @@
   <dict>
     <key>PATH</key><string>/Users/dhruvpatel/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
   </dict>
-  <key>WorkingDirectory</key><string>/Users/dhruvpatel/kalshi-15m-lab</string>
-  <key>StandardOutPath</key><string>/Users/dhruvpatel/kalshi-15m-lab/launchd.out.log</string>
-  <key>StandardErrorPath</key><string>/Users/dhruvpatel/kalshi-15m-lab/launchd.err.log</string>
+  <key>WorkingDirectory</key><string>/Users/dhruvpatel/market-lab</string>
+  <key>StandardOutPath</key><string>/Users/dhruvpatel/market-lab/launchd.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/dhruvpatel/market-lab/launchd.err.log</string>
 </dict>
 </plist>

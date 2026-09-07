@@ -1,6 +1,15 @@
-# Kalshi 15-minute lab
+# Market lab
 
-A durable record of Kalshi's 15-minute crypto contracts, and tests over it.
+A durable record of **expiring market data**, and tests over it.
+
+Two recorders, one premise: both sources serve only a few days of history, so
+whatever you have in a month is whatever you started collecting today. Nothing
+here can be backfilled.
+
+| Recorder | Source | Retention | Cadence |
+|---|---|---|---|
+| `record.js` | Kalshi 15-minute crypto contracts | ~2 days | every 10 min |
+| `record-futures.js` | CME futures via Yahoo, 15-minute bars | ~5 days | every 30 min |
 
 **Why it exists:** Kalshi serves roughly the last **two days** of settled
 markets, and trades vanish with them. Any question about these contracts that
@@ -15,6 +24,34 @@ KXXRP15M   XRP                               ~2,800
 KXSOL15M   SOL                               ~2,400
 ```
 
+## Futures
+
+`NQ=F` Nasdaq · `ES=F` S&P · `YM=F` Dow · `GC=F` gold · `CL=F` crude — the five
+contracts behind the MNQ/MES/MYM/MGC/MCL micros watched in `flip-notifier`.
+
+```bash
+node record-futures.js            # capture new bars
+node record-futures.js --status
+```
+
+Deduped on bar timestamp, so a re-run is a no-op. Bars Yahoo pads with nulls
+for periods that never traded are dropped rather than stored — keeping them
+would put fake flat bars into a volatility study.
+
+**What this data is for.** These feeds are delayed (~10 min, same as the `_DL`
+feeds in flip-notifier), so it is research data — volatility work, daily-horizon
+studies — **not an intraday signal source**. A 15-minute forecast built on
+10-minute-old prices leaves almost no usable edge against participants at the
+exchange. Real-time CME data needs a paid TradingView plan plus the exchange
+add-on.
+
+The interesting question for futures is **volatility, not direction**. Session
+structure is real and learnable — Asian overnight is thin, the US cash open at
+09:30 ET spikes — whereas direction runs into the same efficient-market wall the
+Kalshi data already demonstrated. And the honest baseline for volatility is not
+a random walk but *average volatility by hour of day*, which a lookup table
+gives you for free.
+
 ## Capture
 
 ```bash
@@ -23,7 +60,7 @@ node record.js --status     # how much history is on disk
 node record.js --series KXETH15M
 ```
 
-Runs every 10 minutes under `com.dhruv.kalshi15m`. Windows settle every 15
+Runs every 10 minutes under `com.dhruv.marketlab`. Windows settle every 15
 minutes and the API retains ~2 days of them, so several consecutive failures
 still recover on the next success.
 
@@ -150,7 +187,7 @@ others are not really priced at all.
 
 ## Daily report
 
-An email lands at **07:00 Eastern** each morning (`com.dhruv.kalshi15m.report`) at
+An email lands at **07:00 Eastern** each morning (`com.dhruv.marketlab.report`) at
 darup67@gmail.com. It reuses `~/flip-notifier/send-email.js` and the same
 Keychain app password, so there is no second credential to manage.
 
