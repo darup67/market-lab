@@ -36,6 +36,16 @@ const LOG_MAX_BYTES   = 512 * 1024;
 const TRADE_PAGES     = 10;    // 1000/page; a BTC window runs ~8k
 const PATH_POINTS     = 15;    // downsampled path — one point per minute
 
+// Storage ceiling for data/. At the observed ~425 bytes/row and 384 rows a day
+// this is roughly 57 MB a year, so 5 GB is about ninety years out — it is a
+// guard against a bug writing in a loop, not a real capacity limit.
+//
+// Hitting it STOPS capture of data that cannot be backfilled, so it must never
+// be a quiet stop: it logs at WARN volume, exits non-zero so launchctl shows a
+// failing agent, and warns on approach rather than only on arrival.
+const MAX_BYTES  = Number(process.env.KLAB_MAX_BYTES) || 5 * 1024 ** 3;
+const WARN_AT    = 0.8;
+
 const args = new Set(process.argv.slice(2));
 const argVal = f => { const a = process.argv.slice(2); const i = a.indexOf(f); return i >= 0 ? a[i+1] : null; };
 
@@ -110,6 +120,21 @@ async function apiGet(path, params = {}) {
 /* ------------------------------------------------------------- the capture */
 
 const fileFor = s => join(DATA_DIR, `${s}.jsonl`);
+
+const fmtBytes = b =>
+  b >= 1024 ** 3 ? `${(b / 1024 ** 3).toFixed(2)} GB`
+: b >= 1024 ** 2 ? `${(b / 1024 ** 2).toFixed(1)} MB`
+: `${(b / 1024).toFixed(0)} KB`;
+
+/** Total bytes under data/. */
+function dataBytes() {
+  let total = 0;
+  for (const s of SERIES) {
+    const f = fileFor(s);
+    if (existsSync(f)) { try { total += statSync(f).size; } catch {} }
+  }
+  return total;
+}
 
 /** Window tickers already on disk. Read once per series; keeps re-runs free. */
 function recorded(series) {
@@ -234,8 +259,32 @@ async function main() {
       const kb = (statSync(f).size / 1024).toFixed(0);
       console.log(`  ${s.padEnd(11)} ${String(rows.length).padStart(5)} windows  ${w[0]} -> ${w[w.length-1]}  ${kb} KB`);
     }
+    const used = dataBytes();
+    const pctv = used / MAX_BYTES * 100;
     console.log(`\n  ${total} windows total (~${(total/96).toFixed(1)} series-days)`);
+    console.log(`  storage ${fmtBytes(used)} of ${fmtBytes(MAX_BYTES)} ceiling (${pctv.toFixed(3)}%)` +
+                (pctv >= 100 ? '  — HALTED' : pctv >= WARN_AT * 100 ? '  — approaching' : ''));
+    if (total > 0 && used > 0) {
+      const perDay = (used / total) * 96 * SERIES.length;
+      const daysLeft = (MAX_BYTES - used) / perDay;
+      console.log(`  growing ~${fmtBytes(perDay)}/day -> ceiling in ~${(daysLeft/365).toFixed(0)} years`);
+    }
     return;
+  }
+
+  // Check the ceiling before any capture. Refusing here rather than mid-run
+  // keeps every file a complete set of rows.
+  const used = dataBytes();
+  if (used >= MAX_BYTES) {
+    log(`STOPPED: data/ is ${fmtBytes(used)}, at or past the ${fmtBytes(MAX_BYTES)} ceiling. ` +
+        `Recording is HALTED and these windows cannot be backfilled later. ` +
+        `Archive or prune data/, or raise KLAB_MAX_BYTES.`);
+    process.exitCode = 1;          // surfaces as a failing agent in launchctl list
+    return;
+  }
+  if (used >= MAX_BYTES * WARN_AT) {
+    log(`WARN: data/ is ${fmtBytes(used)} — ${(used / MAX_BYTES * 100).toFixed(0)}% of the ` +
+        `${fmtBytes(MAX_BYTES)} ceiling. Capture stops at 100%.`);
   }
 
   const only = argVal('--series');

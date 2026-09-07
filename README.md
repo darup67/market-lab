@@ -44,6 +44,30 @@ window resolved without storing 8,000 raw trades.
 That row is a good example of why the path matters: it opened at 73¢ — the
 market leaning YES — and settled NO.
 
+## Storage ceiling
+
+Capture halts when `data/` reaches **5 GB** (`KLAB_MAX_BYTES` to change it).
+
+At the observed **~425 bytes/row** and 384 rows a day, that is roughly **57 MB a
+year — about ninety years** from the ceiling. It is a guard against a bug
+writing in a loop, not a capacity limit you will meet.
+
+Because hitting it stops capture of data that **cannot be backfilled**, the stop
+is deliberately loud rather than quiet:
+
+- logs `STOPPED: … Recording is HALTED and these windows cannot be backfilled later`
+- **exits non-zero**, so `launchctl list` shows a failing agent instead of a clean one
+- warns from **80%** onward, so approach is visible before arrival
+- `--status` prints usage, percentage, and years remaining
+
+```
+  storage 334 KB of 5.00 GB ceiling (0.006%)
+  growing ~159 KB/day -> ceiling in ~90 years
+```
+
+The check runs before any capture, so a run either records a complete set of
+rows or none — never a file truncated mid-window.
+
 ## Analysis
 
 ```bash
