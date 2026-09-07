@@ -217,6 +217,32 @@ that was running fine. Those labels are **Eastern** — that window's `close_tim
 is `15:30Z`. The check now keys on `close_time`, which is explicit ISO UTC and
 needs no decoding.
 
+## Chronos-test reminder
+
+The daily email carries a quiet countdown:
+
+```
+Chronos test: 203 of 1400 windows (1197 to go, ~12 days).
+```
+
+When the dataset reaches **1400 BTC windows**, a *separate* one-time email
+arrives with the test design in it, so the one moment worth acting on is not
+buried in a routine report. It fires **once** — a reminder repeated daily
+becomes another line you skim past, which defeats the point of waiting.
+
+**Why 1400.** A 50/50 split leaves ~700 test windows, which detects a move from
+the 83% opening-print baseline to 88% at roughly 80% power. Below ~1000 a
+five-point difference is indistinguishable from noise, so an earlier test would
+give a confident answer that means nothing. Lowering `KLAB_CHRONOS_N` still
+works, but the email then says plainly that the holdout may be too small rather
+than repeating a justification that no longer holds.
+
+The test itself is written into that email — model, split, baseline, and the
+prediction stated in advance that **Chronos loses to the opening print**. Fixed
+now so it cannot be quietly revised after the result is known.
+
+Re-arm by deleting `.chronos-notified`.
+
 ## Analysis
 
 ```bash

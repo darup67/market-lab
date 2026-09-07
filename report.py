@@ -19,6 +19,14 @@ SEND     = os.path.expanduser("~/flip-notifier/send-email.js")
 KEYCHAIN = ["/usr/bin/security", "find-generic-password",
             "-a", "darup67@gmail.com", "-s", "flip-notifier-gmail", "-w"]
 MAX_BYTES = int(os.environ.get("KLAB_MAX_BYTES", 5 * 1024**3))
+
+# When there is enough data to test a forecasting model against the opening
+# print. 1400 BTC windows gives a 700-window holdout on a 50/50 split, which
+# detects 83% -> 88% at roughly 80% power. Below ~1000 a five-point difference
+# is indistinguishable from noise, and a test that cannot separate the two
+# would produce a confident answer that means nothing.
+CHRONOS_THRESHOLD = int(os.environ.get("KLAB_CHRONOS_N", 1400))
+CHRONOS_FLAG = os.path.join(HERE, ".chronos-notified")
 DRY = "--dry" in sys.argv
 
 def fmt_bytes(b):
@@ -213,6 +221,18 @@ def build():
         L.append(f"   ETH, SOL and XRP opening prices are wrong {avg:.0f}% of the time - coin flips.")
     L.append("")
 
+    # Countdown to the Chronos test — one quiet line, so the dedicated email
+    # when it lands is a confirmation rather than a surprise.
+    if btc:
+        left = CHRONOS_THRESHOLD - len(btc)
+        if left > 0:
+            L.append(f"Chronos test: {len(btc)} of {CHRONOS_THRESHOLD} windows "
+                     f"({left} to go, ~{left/96:.0f} days).")
+        else:
+            L.append(f"Chronos test: READY - {len(btc)} windows. "
+                     f"Say \"fire Chronos on the Kalshi data\".")
+        L.append("")
+
     # --------------------------------------------------------------- footer
     L.append(f"{total} windows recorded, {fmt_bytes(used)} used"
              f"{'' if used/MAX_BYTES < 0.5 else f' ({used/MAX_BYTES*100:.0f}% of ceiling)'}.")
@@ -227,6 +247,52 @@ def build():
     return subject, "\n".join(L)
 
 
+def chronos_ready(btc_n):
+    """
+    One-time email when the dataset is large enough to test Chronos.
+
+    Fires once and then never again — a reminder repeated daily becomes another
+    line you skim past, which defeats the point of waiting for it.
+    """
+    if btc_n < CHRONOS_THRESHOLD or os.path.exists(CHRONOS_FLAG):
+        return None
+    # State the power claim only when it is actually true. If the threshold was
+    # lowered by hand, say so rather than repeating a justification that no
+    # longer holds — a reminder that overstates its own basis is worse than none.
+    half = btc_n // 2
+    if btc_n >= 1400:
+        why = (f"   A 50/50 split leaves ~{half} test windows, which detects a move from the\n"
+               f"   83% opening-print baseline to 88% at roughly 80% power. Below ~1000\n"
+               f"   windows a five-point difference is indistinguishable from noise.")
+    else:
+        why = (f"   NOTE: the threshold was lowered to {CHRONOS_THRESHOLD}, below the ~1400\n"
+               f"   originally chosen. A {half}-window holdout may not separate a real\n"
+               f"   improvement from noise, so treat any result as provisional.")
+    body = f"""The BTC 15m dataset has reached {btc_n} windows ({btc_n/96:.0f} days).
+That is enough to test a forecasting model with a holdout that can actually
+separate a real improvement from noise.
+
+WHY THIS NUMBER
+{why}
+
+THE TEST, AS AGREED
+   Model      Chronos-2 / Chronos-Bolt (HuggingFace, zero-shot, runs on CPU)
+   Fit on     the first half of the windows, chronologically
+   Predict    the second half
+   Beat       "just use the opening price" - currently right 83% of the time
+   Prediction stated in advance: Chronos LOSES to the opening print, because
+              the market prices ~8,000 trades per window
+
+   A negative result is the point, not a failure. It is written down now so it
+   cannot be quietly revised afterwards.
+
+TO START
+   Tell Claude: "fire Chronos on the Kalshi data"
+
+This reminder is sent once. Delete .chronos-notified to re-arm it."""
+    return (f"BTC 15m - ready for the Chronos test ({btc_n} windows)", body)
+
+
 def main():
     subject, body = build()
     if DRY:
@@ -239,11 +305,22 @@ def main():
             pw = ""
     if not pw:
         print("no Gmail app password — cannot send"); sys.exit(1)
-    r = subprocess.run(["node", SEND, subject, body], capture_output=True, text=True,
-                       timeout=60, env={**os.environ, "FLIP_GMAIL_APP_PASSWORD": pw})
-    if r.returncode != 0:
-        print("send failed:", (r.stderr or r.stdout).strip()[:300]); sys.exit(1)
-    print(f"sent: {subject}")
+    def send(subj, text):
+        r = subprocess.run(["node", SEND, subj, text], capture_output=True, text=True,
+                           timeout=60, env={**os.environ, "FLIP_GMAIL_APP_PASSWORD": pw})
+        if r.returncode != 0:
+            print("send failed:", (r.stderr or r.stdout).strip()[:300]); return False
+        print(f"sent: {subj}"); return True
+
+    if not send(subject, body):
+        sys.exit(1)
+
+    # Separate email, so the one moment worth acting on is not buried inside a
+    # routine daily report.
+    btc_n = len(load().get("KXBTC15M", []))
+    ready = chronos_ready(btc_n)
+    if ready and send(*ready):
+        open(CHRONOS_FLAG, "w").write(datetime.now(timezone.utc).isoformat() + "\n")
 
 if __name__ == "__main__":
     main()
