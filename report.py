@@ -10,7 +10,7 @@ first and stated plainly.
     python3 report.py            build and send
     python3 report.py --dry      print it, send nothing
 """
-import json, glob, os, sys, subprocess, statistics as st
+import json, glob, os, sys, subprocess, time, statistics as st
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 
@@ -263,13 +263,18 @@ def build():
 
     # ---------------------------------------------------------------- health
     problems = []
+    old_gaps = {}
     for s_, rows in sorted(data.items()):
         newest = max((t for t in (wtime(r) for r in rows) if t), default=None)
         if newest and (now - newest).total_seconds() / 3600 > 2:
             problems.append(f"{s_} last captured {(now-newest).total_seconds()/3600:.1f}h ago — recorder may be stopped")
+        # Gaps are permanent (Kalshi keeps ~2 days), so a lifetime count would
+        # flag every report forever. Only a gap in the last 24h is news.
         miss, _ = gaps(rows)
-        if miss:
-            problems.append(f"{s_} is missing {len(miss)} window(s)")
+        recent = [m for m in miss if m > day_ago]
+        if recent:
+            problems.append(f"{s_} missed {len(recent)} window(s) in the last 24h")
+        old_gaps[s_] = len(miss) - len(recent)
     if used / MAX_BYTES >= 0.8:
         problems.append(f"storage {used/MAX_BYTES*100:.0f}% full — capture halts at 100%")
 
@@ -354,6 +359,8 @@ def build():
     # --------------------------------------------------------------- footer
     L.append(f"{total} windows recorded, {fmt_bytes(used)} used"
              f"{'' if used/MAX_BYTES < 0.5 else f' ({used/MAX_BYTES*100:.0f}% of ceiling)'}.")
+    if any(old_gaps.values()):
+        L.append("Older permanent gaps: " + ", ".join(f"{k} {v}" for k, v in sorted(old_gaps.items()) if v) + ".")
     L.append("Figures are in-sample and exclude fees - not advice.")
     L.append("Detail: python3 analyze.py   |   python3 query.py \"SELECT ...\"")
 
@@ -423,12 +430,24 @@ def main():
             pw = ""
     if not pw:
         print("no Gmail app password — cannot send"); sys.exit(1)
-    def send(subj, text):
-        r = subprocess.run(["node", SEND, subj, text], capture_output=True, text=True,
-                           timeout=60, env={**os.environ, "FLIP_GMAIL_APP_PASSWORD": pw})
-        if r.returncode != 0:
-            print("send failed:", (r.stderr or r.stdout).strip()[:300]); return False
-        print(f"sent: {subj}"); return True
+    def send(subj, text, tries=4):
+        # A single network blip used to cost the whole day's report. Retry with
+        # growing pauses; the job runs once a day, so waiting is cheap.
+        env = {**os.environ, "FLIP_GMAIL_APP_PASSWORD": pw, "SEND_EMAIL_TIMEOUT_MS": "90000"}
+        for n in range(tries):
+            try:
+                r = subprocess.run(["node", SEND, subj, text], capture_output=True,
+                                   text=True, timeout=120, env=env)
+                err = None if r.returncode == 0 else (r.stderr or r.stdout).strip()[:300]
+            except subprocess.TimeoutExpired:
+                err = "node send-email.js timed out"
+            if err is None:
+                print(f"sent: {subj}"); return True
+            print(f"send failed (try {n+1}/{tries}):", err, flush=True)
+            if "permanent" in err or n == tries - 1:
+                return False
+            time.sleep(60 * (n + 1))
+        return False
 
     if not send(subject, body):
         sys.exit(1)
