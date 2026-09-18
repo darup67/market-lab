@@ -136,9 +136,13 @@ def load_futures():
             if not line.strip():
                 continue
             try:
-                rows.append(json.loads(line))
+                r = json.loads(line)
             except Exception:
                 continue
+            # Skip Yahoo live-quote snapshots (unaligned time, o=h=l=c, v=0)
+            # stored before 2026-09-18; they are not bars.
+            if r.get("t", 0) % 900 == 0:
+                rows.append(r)
         if rows:
             rows.sort(key=lambda r: r["t"])
             out[rows[0]["sym"]] = rows

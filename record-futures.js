@@ -39,6 +39,7 @@ const SYMBOLS = [
 ];
 
 const INTERVAL   = '15m';
+const BAR_SECONDS = 15 * 60;             // must match INTERVAL
 const RANGE      = '5d';              // Yahoo's ceiling for 15m data
 const HTTP_TIMEOUT_MS = 20000;
 const LOCK_STALE_MS   = 10 * 60 * 1000;
@@ -119,6 +120,10 @@ async function fetchBars(y) {
         // Yahoo pads the series with nulls for bars that never traded; keeping
         // them would put fake flat bars into a volatility study.
         if ([o, h, l, c].some(x => x == null)) continue;
+        // The response ends with a live-quote pseudo-bar stamped with the quote
+        // time (e.g. 12:32:35), o=h=l=c, v=0. It is not a bar: until 2026-09-18
+        // one was stored per run (272 per symbol), adding fake zero-range bars.
+        if (r.timestamp[i] % BAR_SECONDS !== 0) continue;
         out.push({ t: r.timestamp[i], o, h, l, c, v: v ?? null });
       }
       return out;
