@@ -13,6 +13,8 @@ first and stated plainly.
 import json, glob, os, sys, subprocess, time, statistics as st
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from analyze import opening, clock_range   # clock-aligned; `first`/`range` are trade-truncated
 
 HERE     = os.path.dirname(os.path.abspath(__file__))
 SEND     = os.path.expanduser("~/flip-notifier/send-email.js")
@@ -22,7 +24,7 @@ MAX_BYTES = int(os.environ.get("KLAB_MAX_BYTES", 5 * 1024**3))
 
 # When there is enough data to test a forecasting model against the opening
 # print. 1400 BTC windows gives a 700-window holdout on a 50/50 split, which
-# detects 83% -> 88% at roughly 80% power. Below ~1000 a five-point difference
+# detects a five-point move off the ~60% minute-1 baseline at about 75% power. Below ~1000 a five-point difference
 # is indistinguishable from noise, and a test that cannot separate the two
 # would produce a confident answer that means nothing.
 CHRONOS_THRESHOLD = int(os.environ.get("KLAB_CHRONOS_N", 1400))
@@ -117,9 +119,11 @@ def wilson(k, n):
     return (max(0, c-h), min(1, c+h))
 
 def pct_wrong(rows):
-    if not rows:
+    op = [(r, opening(r)) for r in rows]
+    op = [(r, o) for r, o in op if o is not None and o != 50]
+    if not op:
         return None
-    return 100.0 * sum(1 for r in rows if (r["first"] > 50) != r["settled_yes"]) / len(rows)
+    return 100.0 * sum(1 for r, o in op if (o > 50) != r["settled_yes"]) / len(op)
 
 
 # --- futures indicators -----------------------------------------------------
@@ -313,17 +317,21 @@ def build():
     # ------------------------------------------------------------- overnight
     if night:
         yes   = sum(1 for r in night if r["settled_yes"])
-        right = sum(1 for r in night if (r["first"] > 50) == r["settled_yes"])
-        rng   = st.mean([r["range"] for r in night])
+        nop   = [(r, opening(r)) for r in night]
+        nop   = [(r, o) for r, o in nop if o is not None and o != 50]
+        right = sum(1 for r, o in nop if (o > 50) == r["settled_yes"])
+        crs   = [x for x in (clock_range(r) for r in night) if x is not None]
         L.append(f"OVERNIGHT  ({len(night)} BTC windows)")
         L.append(f"   Settled YES        {yes} of {len(night)}  ({100*yes//len(night)}%)")
-        L.append(f"   Opening price right {right} of {len(night)}  ({100*right//len(night)}%)")
-        L.append(f"   Average swing      {rng:.0f}c")
-        surprises = sorted((r for r in night if (r["first"] > 50) != r["settled_yes"]),
-                           key=lambda r: -abs(r["first"] - 50))[:2]
-        for r in surprises:
+        if nop:
+            L.append(f"   Minute-1 price right {right} of {len(nop)}  ({100*right//len(nop)}%)")
+        if crs:
+            L.append(f"   Average swing      {st.mean(crs):.0f}c")
+        surprises = sorted(((r, o) for r, o in nop if (o > 50) != r["settled_yes"]),
+                           key=lambda x: -abs(x[1] - 50))[:2]
+        for r, o in surprises:
             when = (wtime(r).strftime("%H:%MZ") if wtime(r) else r.get("window"))
-            L.append(f"   Surprise           {when}  opened {r['first']:.0f}c, settled "
+            L.append(f"   Surprise           {when}  minute 1 at {o:.0f}c, settled "
                      f"{'YES' if r['settled_yes'] else 'NO'}")
         L.append("")
 
@@ -331,19 +339,26 @@ def build():
     L.append(f"CONTEXT  (all {len(btc)} BTC windows so far)")
     if btc:
         w = pct_wrong(btc)
-        L.append(f"   The opening price is right {100-w:.0f}% of the time.")
-        dec = sum(1 for r in btc if r["first"] < 10 or r["first"] > 90)
-        L.append(f"   {100*dec//len(btc)}% of windows are already decided when trading starts.")
+        ops = [o for o in (opening(r) for r in btc) if o is not None]
+        if w is not None and ops:
+            L.append(f"   The price at minute 1 is right {100-w:.0f}% of the time.")
+            dec = sum(1 for o in ops if o < 10 or o > 90)
+            L.append(f"   {100*dec//len(ops)}% of windows are already decided by minute 1.")
     if len(btc) > VOL_W + 10:
-        pairs = [(st.mean([x["range"] for x in btc[i-VOL_W:i]]), btc[i]["range"])
-                 for i in range(VOL_W, len(btc))]
+        cr = [clock_range(r) for r in btc]
+        pairs = [(st.mean(cr[i-VOL_W:i]), cr[i]) for i in range(VOL_W, len(btc))
+                 if all(x is not None for x in cr[i-VOL_W:i + 1])]
         c = corr(pairs)
         if c is not None:
             L.append(f"   Volatility does not predict the next window (correlation {c:+.2f}).")
     others = [k for k in sorted(data) if k != "KXBTC15M"]
     if others:
-        avg = st.mean([pct_wrong(data[k]) for k in others])
-        L.append(f"   ETH, SOL and XRP opening prices are wrong {avg:.0f}% of the time - coin flips.")
+        ws = [pct_wrong(data[k]) for k in others
+              if sum(1 for r in data[k] if opening(r) is not None) >= 50]
+        ws = [x for x in ws if x is not None]
+        if ws:
+            L.append(f"   ETH, SOL and XRP minute-1 prices are wrong {st.mean(ws):.0f}% of the time"
+                     f" (only windows recorded since 2026-09-23 carry clock-aligned quotes).")
     L.append("")
 
     # Countdown to the Chronos test — one quiet line, so the dedicated email
@@ -391,7 +406,7 @@ def chronos_ready(btc_n):
     half = btc_n // 2
     if btc_n >= 1400:
         why = (f"   A 50/50 split leaves ~{half} test windows, which detects a move from the\n"
-               f"   83% opening-print baseline to 88% at roughly 80% power. Below ~1000\n"
+               f"   ~60% minute-1 baseline to ~65% at about 75% power. Below ~1000\n"
                f"   windows a five-point difference is indistinguishable from noise.")
     else:
         why = (f"   NOTE: the threshold was lowered to {CHRONOS_THRESHOLD}, below the ~1400\n"
@@ -408,7 +423,7 @@ THE TEST, AS AGREED
    Model      Chronos-2 / Chronos-Bolt (HuggingFace, zero-shot, runs on CPU)
    Fit on     the first half of the windows, chronologically
    Predict    the second half
-   Beat       "just use the opening price" - currently right 83% of the time
+   Beat       "just use the minute-1 price" - right ~60% of the time
    Prediction stated in advance: Chronos LOSES to the opening print, because
               the market prices ~8,000 trades per window
 

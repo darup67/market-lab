@@ -14,7 +14,7 @@ targets form a 15-minute spot series, and P(up) is readable off a forecast's
 quantiles at the current price.
 
 Contenders, all restricted to what is known at the window's open:
-    print         market's first trade, P = first/100          (the baseline)
+    print         market's YES mid at minute 1 (clock-aligned)  (the baseline)
     chronos-bolt  amazon/chronos-bolt-base, zero-shot on the spot series
     chronos-2     amazon/chronos-2, zero-shot on the spot series
     ag-ts         AutoGluon-TimeSeries fitted on the first half
@@ -28,6 +28,8 @@ import json, os, sys, math, glob, time, random, warnings
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from analyze import opening   # clock-aligned minute-1 mid; `first` is trade-truncated
 import pandas as pd
 
 warnings.filterwarnings("ignore")
@@ -197,11 +199,11 @@ def ag_tabular(series, rows, train_idx, test_idx, with_print):
             if f is None:
                 return None
             if with_print:
-                f["first"] = rows[i]["first"]
+                f["open_mid"] = opening(rows[i])
             f["y"] = int(rows[i]["settled_yes"])
             recs.append(f)
         return pd.DataFrame(recs)
-    tr = pd.DataFrame([{**features(rows, i), **({"first": rows[i]["first"]} if with_print else {}),
+    tr = pd.DataFrame([{**features(rows, i), **({"open_mid": opening(rows[i])} if with_print else {}),
                         "y": int(rows[i]["settled_yes"])} for i in train_idx if features(rows, i)])
     te = frame(test_idx)
     tag = "print" if with_print else "hist"
@@ -224,7 +226,7 @@ def run(series):
     usable = [i for i in range(len(rows))
               if len(contiguous_context(rows, i, CTX_MIN)[0]) >= CTX_MIN and features(rows, i)]
     train_idx = [i for i in range(half)]
-    test_idx = [i for i in usable if i >= half]
+    test_idx = [i for i in usable if i >= half and opening(rows[i]) is not None]
     y = [int(rows[i]["settled_yes"]) for i in test_idx]
     print(f"\n=== {series}: {len(rows)} windows · fit {half} "
           f"({rows[0]['t']:%m-%d %H:%M} → {rows[half-1]['t']:%m-%d %H:%M}Z) · "
@@ -232,7 +234,7 @@ def run(series):
           flush=True)
 
     preds, notes = {}, {}
-    preds["print"] = [rows[i]["first"] / 100 for i in test_idx]
+    preds["print"] = [opening(rows[i]) / 100 for i in test_idx]
     preds["coin"] = [0.5] * len(test_idx)   # reference: Brier 0.25, no skill
     ctxs = [contiguous_context(rows, i, CTX_MAX)[0] for i in test_idx]
     cur = [rows[i]["target"] for i in test_idx]

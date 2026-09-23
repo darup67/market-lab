@@ -89,19 +89,31 @@ briefly behind. The commit is already local, so the next run pushes both.
 **Append-only and idempotent.** Rows are keyed by window ticker; a re-run adds
 nothing. Verified: a second run reported `796 already had`.
 
-Each row carries the settlement, the opening and closing prints, min/max/range,
-quartile prices, and a 15-point downsampled path — enough to reconstruct how a
-window resolved without storing 8,000 raw trades.
+Each row carries the settlement, `minute_quotes` (the clock-aligned YES bid/ask
+at the open and at the end of each of the 15 minutes, in cents, from Kalshi's
+1-minute candles), and legacy trade-derived fields: `first`/`last`,
+min/max/range, quartiles and a 15-point `path`.
+
+> **Correction, 2026-09-23 — the legacy fields are not what their names say.**
+> The recorder keeps only the newest 10,000 trades, and *every* BTC window hits
+> that cap. So `first` is a mid-window price, not the opening print; `path` is
+> spaced by trade count, not by minute; and `range`/min/max cover only the tail
+> of the window. Use `minute_quotes` for anything time-based. BTC rows were
+> backfilled with it (original bytes untouched, checked line by line; pre-change
+> copy in `~/market-lab-backups/`). ETH/SOL/XRP carry it only from 2026-09-23 on.
+> Every opening-print and volatility figure below was redone on `minute_quotes`.
 
 ```json
 {"series":"KXBTC15M","window":"26SEP071130","target":79054.02,
  "settled_yes":false,"trades":10000,"first":73,"last":0.1,
  "min":0.1,"max":85,"range":84.9,"q25":61,"q50":31,"q75":11,
- "path":[73,75,77,68,61,36,29,31,27,29,...]}
+ "path":[73,75,77,68,61,36,29,31,27,29,...],
+ "minute_quotes":[[0.5,100],[48,49],[44,45],[28,29],[42,43],[71,72],...,[0,0.1]]}
 ```
 
-That row is a good example of why the path matters: it opened at 73¢ — the
-market leaning YES — and settled NO.
+That row shows the bug: `first` says it "opened at 73¢", but the real quote at
+the end of minute 1 was 48/49¢ — a coin flip. Index 0 is often an empty book
+(0.5/100), so the opening print used everywhere is the **minute-1 mid**.
 
 ## Storage ceiling
 
@@ -180,10 +192,10 @@ FROM w GROUP BY series ORDER BY avg_range;
   KXXRP15M  201  70.3       51.7     44.8
 ```
 
-That last column is the most interesting thing in the dataset so far. **BTC's
-opening print is wrong 17% of the time; the other three are wrong ~45%** — a
-coin flip. BTC's book is deep enough to price the window at the open; the
-others are not really priced at all.
+That last column was computed from the legacy `first` field and is **wrong** —
+see the correction above. On clock-aligned quotes (1,725 windows) BTC's
+minute-1 price is wrong **40%** of the time [38%, 43%], much closer to the
+alts than it looked.
 
 ## Daily report
 
@@ -216,9 +228,9 @@ OVERNIGHT  (96 BTC windows)
    Surprise           21:45Z  opened 99c, settled NO
 
 CONTEXT  (all 202 BTC windows so far)
-   The opening price is right 83% of the time.
-   31% of windows are already decided when trading starts.
-   Volatility does not predict the next window (correlation +0.13).
+   The price at minute 1 is right 60% of the time.
+   0% of windows are already decided by minute 1.
+   Volatility does not predict the next window (correlation -0.05).
 ```
 
 Four deliberate choices, after a first version that was six dense tables:
@@ -307,7 +319,8 @@ buried in a routine report. It fires **once** — a reminder repeated daily
 becomes another line you skim past, which defeats the point of waiting.
 
 **Why 1400.** A 50/50 split leaves ~700 test windows, which detects a move from
-the 83% opening-print baseline to 88% at roughly 80% power. Below ~1000 a
+the ~60% minute-1 baseline to ~65% at about 75% power (originally stated as
+83%→88% at 80%, on the flawed `first` field). Below ~1000 a
 five-point difference is indistinguishable from noise, so an earlier test would
 give a confident answer that means nothing. Lowering `KLAB_CHRONOS_N` still
 works, but the email then says plainly that the holdout may be too small rather
@@ -315,7 +328,9 @@ than repeating a justification that no longer holds.
 
 The test itself is written into that email — model, split, baseline, and the
 prediction stated in advance that **Chronos loses to the opening print**. Fixed
-now so it cannot be quietly revised after the result is known.
+now so it cannot be quietly revised after the result is known. (The test ran
+2026-09-18 against the flawed `first` baseline; its "print 85.9%" row is a
+mid-window price. See `results/ml-test-2026-09-18.md`.)
 
 Re-arm by deleting `.chronos-notified`.
 
@@ -329,21 +344,24 @@ python3 analyze.py KXBTC15M
 Stdlib only, no dependencies. Every proportion is reported with a **95%
 confidence interval**, because small samples lie confidently without one.
 
-### What the first 201 BTC windows say
+### What 1,725 BTC windows say (clock-aligned, 2026-09-23)
 
-| | |
-|---|---|
-| Base rate | 46.8% YES  [40%, 54%] |
-| Opening print wrong | 17%  [13%, 23%] |
-| ...when it opens <10¢ or >90¢ | 10% |
-| ...when it opens 35–65¢ | 30% |
-| Effectively decided at the open | 31% |
-| Vol persistence, corr(prior hour, next window) | **+0.14** |
+| | corrected | originally reported (legacy fields, 201 windows) |
+|---|---|---|
+| Base rate | 50.0% YES [48%, 52%] | 46.8% |
+| Opening print (minute-1 mid) wrong | **40%** [38%, 43%] | 17% |
+| ...when it opens 35–65¢ | 43% [40%, 45%] (82% of windows) | 30% |
+| Decided by minute 1 (<10¢ or >90¢) | **0%** | 31% |
+| Vol persistence, corr(prior hour, next window) | **−0.05** | +0.14 |
 
-**The vol-persistence number is the load-bearing one.** A LOW/NORMAL/HIGH
-volatility filter is only useful if a calm hour predicts a calm next window.
-At +0.14 it barely does: after LOW the next window averages 37.1¢ of range,
-after NORMAL 40.5¢. That gap is thin. Only HIGH separates meaningfully (48.8¢).
+**The market is not priced at the open.** At minute 1 BTC is almost always
+between 20¢ and 80¢, and the minute-1 mid is well calibrated (60–69¢ settles YES
+64%, 30–39¢ settles YES 38%) — informative, but nowhere near "decided".
+
+**Volatility does not persist.** On clock-aligned ranges the correlation is
+zero, so the LOW/NORMAL/HIGH filter has no support at all. (The report's
+regime bands still use the legacy `range` with 28/52¢ cut-offs calibrated on
+it; they describe the trade tail, not the window.)
 
 So the volatility index in the sibling `flip-notifier` repo is sound as
 *context* — it accurately describes what just happened — but the data does not

@@ -35,7 +35,7 @@ const HTTP_TIMEOUT_MS = 20000;
 const LOCK_STALE_MS   = 10 * 60 * 1000;
 const LOG_MAX_BYTES   = 512 * 1024;
 const TRADE_PAGES     = 10;    // 1000/page; a BTC window runs ~8k
-const PATH_POINTS     = 15;    // downsampled path — one point per minute
+const PATH_POINTS     = 15;    // downsampled path — 15 points by TRADE INDEX, not per minute
 
 // Storage ceiling for data/. At the observed ~425 bytes/row and 384 rows a day
 // this is roughly 57 MB a year, so 5 GB is about ninety years out — it is a
@@ -165,6 +165,36 @@ const money = t => {
   return m ? Number(m[1].replace(/,/g, '')) : null;
 };
 
+/**
+ * Clock-aligned YES quotes, in cents: index m = [bid, ask] at open + m minutes
+ * (0 = the quote at the open, from the first candle's open; 1..15 = each
+ * minute's close). null where Kalshi returned no candle. This is the field to
+ * use for "price at minute m" and for the opening print — see `path` below.
+ */
+async function minuteQuotes(series, m) {
+  const o = Math.floor(Date.parse(m.open_time) / 1000);
+  const c = Math.floor(Date.parse(m.close_time) / 1000);
+  const d = await apiGet(`/series/${series}/markets/${m.ticker}/candlesticks`,
+    { start_ts: o, end_ts: c, period_interval: 1 });
+  return quotesFromCandles(d?.candlesticks || [], o, c);
+}
+
+function quotesFromCandles(candles, o, c) {
+  const cents = x => (x == null || !Number.isFinite(Number(x))) ? null : Number((Number(x) * 100).toFixed(1));
+  const n = Math.round((c - o) / 60);
+  const q = Array(n + 1).fill(null);
+  for (const k of candles) {
+    const i = Math.round((k.end_period_ts - o) / 60);
+    const b = cents(k.yes_bid?.close_dollars), a = cents(k.yes_ask?.close_dollars);
+    if (i >= 1 && i <= n && b != null && a != null) q[i] = [b, a];
+    if (i === 1) {
+      const b0 = cents(k.yes_bid?.open_dollars), a0 = cents(k.yes_ask?.open_dollars);
+      if (b0 != null && a0 != null) q[0] = [b0, a0];
+    }
+  }
+  return q.some(Boolean) ? q : null;
+}
+
 /** Every executed price for one window, oldest first. */
 async function tradePath(ticker) {
   let cursor = null; const pts = [];
@@ -188,10 +218,15 @@ async function tradePath(ticker) {
 
 /**
  * One row per settled window. Stores the derived features most tests need
- * plus a downsampled path — the raw 8k trades are far too large to keep, but
- * a 15-point path still reconstructs the shape of how the window resolved.
+ * plus a downsampled path.
+ *
+ * CAUTION — `path`, `first`, `min`/`max`/`range` and the quartiles come from
+ * the NEWEST TRADE_PAGES×1000 trades only, and `path` is spaced by trade
+ * index, not by time. Every BTC window hits that cap, so `first` is a
+ * mid-window price, NOT the opening print, and path[k] is NOT minute k. Use
+ * `minute_quotes` for anything time-based. (Found 2026-09-23.)
  */
-function features(m, pts) {
+function features(m, pts, minute_quotes = null) {
   const v = pts.map(x => x.p);
   const n = v.length;
   const at = frac => v[Math.min(n - 1, Math.floor(frac * (n - 1)))];
@@ -221,6 +256,7 @@ function features(m, pts) {
     q50:   Number(at(0.50).toFixed(1)),
     q75:   Number(at(0.75).toFixed(1)),
     path,
+    minute_quotes,
     recorded_at: new Date().toISOString(),
   };
 }
@@ -246,8 +282,12 @@ async function captureSeries(series) {
     // A window nobody traded carries no information; recording it would only
     // dilute later statistics with rows that have no path.
     if (pts.length < 20) continue;
+    // Quotes are best-effort: a candle failure must not lose the window.
+    let mq = null;
+    try { mq = await minuteQuotes(series, m); }
+    catch (e) { log(`${series}: candles failed for ${m.ticker} — ${e.message}`); }
     try {
-      appendFileSync(fileFor(series), JSON.stringify(features(m, pts)) + '\n');
+      appendFileSync(fileFor(series), JSON.stringify(features(m, pts, mq)) + '\n');
       added++;
     } catch (e) { log(`${series}: write failed for ${m.ticker} — ${e.message}`); failed++; }
   }
@@ -364,8 +404,13 @@ async function main() {
   if (failed && !added) process.exitCode = 1;
 }
 
-const READ_ONLY = args.has('--status');
-if (!READ_ONLY && !acquireLock()) { log('another run in progress — skipping'); process.exit(0); }
-main()
-  .catch(e => { log(`FATAL ${e.stack || e.message}`); process.exitCode = 1; })
-  .finally(() => { if (!READ_ONLY) releaseLock(); });
+export { minuteQuotes, quotesFromCandles, acquireLock, releaseLock, fileFor, SERIES, log };
+
+// Run only when executed directly, so backfill-minute-quotes.js can import the helpers.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const READ_ONLY = args.has('--status');
+  if (!READ_ONLY && !acquireLock()) { log('another run in progress — skipping'); process.exit(0); }
+  main()
+    .catch(e => { log(`FATAL ${e.stack || e.message}`); process.exitCode = 1; })
+    .finally(() => { if (!READ_ONLY) releaseLock(); });
+}

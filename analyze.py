@@ -7,6 +7,10 @@ tradeable. None of them is a strategy, and a passing test is not an edge —
 fees, slippage and the fact that you cannot trade the open print all sit
 between a statistic and a P&L.
 
+Time-based questions read `minute_quotes` (clock-aligned). The legacy `first`,
+`range` and `path` fields are built from a truncated, trade-indexed sample and
+are shown only for comparison.
+
     python3 analyze.py              all series
     python3 analyze.py KXBTC15M     one series
 """
@@ -33,6 +37,27 @@ def load(series=None):
                 rows.append(r)
     rows.sort(key=lambda r: (r["series"], r.get("window") or ""))
     return rows
+
+MAX_SPREAD = 10   # c; a wider quote at minute 1 is an empty or one-sided book, not a price
+
+def opening(r):
+    """Clock-aligned opening print: YES bid/ask mid at the end of minute 1, cents.
+
+    NOT r["first"]: that is the oldest of the newest 10,000 trades, and every
+    BTC window hits that cap, so it is a mid-window price (found 2026-09-23).
+    """
+    q = (r.get("minute_quotes") or [None, None])[1]
+    if not q or q[1] - q[0] > MAX_SPREAD:
+        return None
+    return (q[0] + q[1]) / 2
+
+
+def clock_range(r):
+    """High-low of the per-minute mids, minutes 1-15, cents. None if too sparse."""
+    mids = [(q[0] + q[1]) / 2 for q in (r.get("minute_quotes") or [])[1:]
+            if q and q[1] - q[0] <= MAX_SPREAD]
+    return max(mids) - min(mids) if len(mids) >= 10 else None
+
 
 def pearson(pairs):
     if len(pairs) < 10:
@@ -69,37 +94,48 @@ def report(rows, series):
     print("  a market this liquid should sit near 50% — a persistent skew would")
     print("  be the first thing worth understanding")
 
+    op = [(r, opening(r)) for r in rows]
+    op = [(r, o) for r, o in op if o is not None]
     hdr("Calibration — does the opening print mean what it says")
-    print(f"  {'first print':<14}{'n':>5}{'settled YES':>13}{'95% CI':>18}")
+    print(f"  opening print = YES mid at minute 1 (clock-aligned); {len(op)}/{n} windows have one")
+    print(f"  {'minute-1 mid':<14}{'n':>5}{'settled YES':>13}{'95% CI':>18}")
     b = defaultdict(list)
-    for r in rows:
-        b[min(9, int(r["first"] // 10))].append(r["settled_yes"])
+    for r, o in op:
+        b[min(9, int(o // 10))].append(r["settled_yes"])
     for k in sorted(b):
         g = b[k]; y = sum(g)
         l, h = wilson(y, len(g))
         print(f"  {k*10:>3}-{k*10+9:<10}{len(g):>5}{y/len(g)*100:>12.0f}%   [{l*100:>3.0f}%, {h*100:>3.0f}%]")
 
     hdr("How often the opening print is wrong")
-    wrong = [r for r in rows if (r["first"] > 50) != r["settled_yes"]]
-    l, h = wilson(len(wrong), n)
-    print(f"  overall            {len(wrong):>4}/{n} = {len(wrong)/n*100:.0f}%   [{l*100:.0f}%, {h*100:.0f}%]")
-    for lbl, sel in (("opens <10c or >90c", lambda r: r["first"] < 10 or r["first"] > 90),
-                     ("opens 35-65c",       lambda r: 35 <= r["first"] <= 65)):
-        g = [r for r in rows if sel(r)]
+    ties = [r for r, o in op if o == 50]
+    dec = [(r, o) for r, o in op if o != 50]
+    wrong = [r for r, o in dec if (o > 50) != r["settled_yes"]]
+    if dec:
+        l, h = wilson(len(wrong), len(dec))
+        print(f"  overall            {len(wrong):>4}/{len(dec)} = {len(wrong)/len(dec)*100:.0f}%   [{l*100:.0f}%, {h*100:.0f}%]"
+              f"   ({len(ties)} at exactly 50c excluded)")
+    for lbl, sel in (("opens <10c or >90c", lambda o: o < 10 or o > 90),
+                     ("opens 35-65c",       lambda o: 35 <= o <= 65)):
+        g = [(r, o) for r, o in dec if sel(o)]
         if not g:
             continue
-        w = sum(1 for r in g if (r["first"] > 50) != r["settled_yes"])
+        w = sum(1 for r, o in g if (o > 50) != r["settled_yes"])
         l, h = wilson(w, len(g))
         print(f"  {lbl:<19}{w:>4}/{len(g)} = {w/len(g)*100:.0f}%   [{l*100:.0f}%, {h*100:.0f}%]")
+    legacy = sum(1 for r in rows if (r["first"] > 50) != r["settled_yes"])
+    print(f"  legacy `first` (trade-truncated, mid-window): wrong {legacy}/{n} = {legacy/n*100:.0f}% — do not use")
 
     hdr("Volatility persistence — the assumption a vol filter depends on")
     W = 4
-    pairs = []
-    for i in range(W, len(rows)):
-        pairs.append((sum(r["range"] for r in rows[i-W:i]) / W, rows[i]["range"]))
-    c = pearson(pairs)
+    legacy = [(sum(r["range"] for r in rows[i-W:i]) / W, rows[i]["range"]) for i in range(W, len(rows))]
+    cr = [clock_range(r) for r in rows]
+    pairs = [(sum(cr[i-W:i]) / W, cr[i]) for i in range(W, len(rows))
+             if all(x is not None for x in cr[i-W:i + 1])]
+    c, cl = pearson(pairs), pearson(legacy)
     print(f"  corr(prior {W}-window mean range, next range) = "
-          f"{'n/a' if c is None else f'{c:+.2f}'}   n={len(pairs)}")
+          f"{'n/a' if c is None else f'{c:+.2f}'}   n={len(pairs)}   (range of clock-aligned minute mids)")
+    print(f"  legacy trade-truncated `range`: {'n/a' if cl is None else f'{cl:+.2f}'} — do not use")
     print("  near zero means a calm hour tells you little about the next window,")
     print("  which is what a LOW/NORMAL/HIGH filter would have to rely on")
     for lbl, sel in (("after LOW  (<28c)", lambda x: x < 28),
@@ -110,12 +146,15 @@ def report(rows, series):
             print(f"    {lbl:<20} next range mean {st.mean(g):5.1f}c   n={len(g)}")
 
     hdr("Where the uncertainty lives")
-    decided = [r for r in rows if r["first"] < 10 or r["first"] > 90]
-    coin    = [r for r in rows if 35 <= r["first"] <= 65]
-    print(f"  effectively decided at the open   {len(decided):>4}/{n} = {len(decided)/n*100:.0f}%")
-    print(f"  genuinely uncertain (35-65c)      {len(coin):>4}/{n} = {len(coin)/n*100:.0f}%")
-    print(f"  mean intra-window range           {st.mean([r['range'] for r in rows]):.1f}c")
-    print(f"  median                            {st.median([r['range'] for r in rows]):.1f}c")
+    decided = [o for _, o in op if o < 10 or o > 90]
+    coin    = [o for _, o in op if 35 <= o <= 65]
+    m = max(len(op), 1)
+    print(f"  decided by minute 1 (<10c/>90c)   {len(decided):>4}/{len(op)} = {len(decided)/m*100:.0f}%")
+    print(f"  genuinely uncertain (35-65c)      {len(coin):>4}/{len(op)} = {len(coin)/m*100:.0f}%")
+    crs = [x for x in cr if x is not None]
+    if crs:
+        print(f"  mean intra-window range           {st.mean(crs):.1f}c   (clock-aligned mids)")
+        print(f"  median                            {st.median(crs):.1f}c")
 
 def main():
     only = sys.argv[1] if len(sys.argv) > 1 else None
