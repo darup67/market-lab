@@ -1,0 +1,57 @@
+{
+  "_comment": "Paper-trading lab. No broker connection anywhere in this repo: every fill is simulated. Rules are fixed per rules_version; changing a strategy or risk number means bumping rules_version and paper_start so live paper results never mix two rule sets.",
+  "rules_version": 1,
+  "paper_start": "2026-09-24T15:00:00Z",
+  "bar_seconds": 900,
+
+  "instruments": {
+    "BTC": {"kind": "crypto", "source": "coinbase", "symbol": "BTC-USD", "long_only": true},
+    "ETH": {"kind": "crypto", "source": "coinbase", "symbol": "ETH-USD", "long_only": true},
+    "MNQ": {"kind": "future", "source": "yahoo", "symbol": "MNQ=F", "multiplier": 2, "tick": 0.25},
+    "MES": {"kind": "future", "source": "yahoo", "symbol": "MES=F", "multiplier": 5, "tick": 0.25},
+    "MGC": {"kind": "future", "source": "yahoo", "symbol": "MGC=F", "multiplier": 10, "tick": 0.1},
+    "MCL": {"kind": "future", "source": "yahoo", "symbol": "MCL=F", "multiplier": 100, "tick": 0.01}
+  },
+
+  "costs": {
+    "_comment": "ESTIMATES, not quotes. Crypto: long-only because Robinhood crypto cannot be shorted; 0.30%/side stands in for Robinhood's spread markup, plus 0.02% slippage. Futures: $0.85/side/contract all-in commission+exchange fees, plus 1 tick slippage per side. Raise these if in doubt: optimistic costs are how paper edges appear.",
+    "crypto_fee_pct": 0.30,
+    "crypto_slippage_pct": 0.02,
+    "future_fee_per_side": 0.85,
+    "future_slippage_ticks": 1
+  },
+
+  "risk": {
+    "_comment": "Deterministic and applied to every order before it is simulated. Nothing a model outputs can change these.",
+    "sleeve_usd": 10000,
+    "max_contracts": 1,
+    "crypto_max_notional_pct": 100,
+    "daily_loss_pct": 3,
+    "max_drawdown_pct": 15
+  },
+
+  "strategies": {
+    "_comment": "Pre-declared parameters, never optimised on this data. flat and hold are the baselines every strategy must beat after costs.",
+    "flat": {},
+    "hold": {},
+    "trend": {"fast": 32, "slow": 128},
+    "breakout": {"entry": 96, "exit": 48},
+    "reversion": {"window": 20, "enter_z": 2.5, "exit_z": 0.5, "max_bars": 16}
+  },
+
+  "calibration": {"horizon_bars": 4, "retrain_bars": 672, "min_train_bars": 1344},
+
+  "news": {
+    "_comment": "Headlines are stored from day one; Jev judges them (shadow only) once an API key exists, backlog included.",
+    "feeds": [
+      "https://www.coindesk.com/arc/outboundfeeds/rss/?outputType=xml",
+      "https://cointelegraph.com/rss",
+      "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114",
+      "https://feeds.content.dowjones.io/public/rss/mw_topstories"
+    ],
+    "judge_per_run": 100,
+    "horizon_bars": 16
+  },
+
+  "email": {"weekly_report": true}
+}

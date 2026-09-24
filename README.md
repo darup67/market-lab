@@ -382,3 +382,13 @@ Not a strategy, and a passing statistic here is not an edge:
 
 The honest use of this repo is to accumulate enough history that a question can
 be asked out-of-sample. That takes weeks, not days.
+
+## Paper lab
+
+`paper-lab/` tests fixed trading rules on BTC, ETH, MNQ, MES, MGC and MCL with
+**simulated fills only**. It has no broker connection. It stores its own
+15-minute bars (Coinbase, and the Yahoo micro contracts) in `paper-lab/data/`,
+separate from `data/futures/`, and commits them hourly. See `paper-lab/README.md`.
+The first backtest agrees with this lab's earlier finding: no measurable
+next-hour edge on any of the six. Only MCL trend and breakout passed after costs,
+in a window when oil trended.
