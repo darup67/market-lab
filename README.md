@@ -392,3 +392,10 @@ separate from `data/futures/`, and commits them hourly. See `paper-lab/README.md
 The first backtest agrees with this lab's earlier finding: no measurable
 next-hour edge on any of the six. Only MCL trend and breakout passed after costs,
 in a window when oil trended.
+
+## Event desk
+
+`event-desk/` emails two briefings: every TradingView watchlist ticker (daily 08:50:
+earnings ahead and news) and the top 10 bio/pharma names by event impact (weekdays
+10:05, built from `~/biotech-iv-agent`'s snapshot). Jev reads the headlines once a
+TypeSafe key exists. Read-only. See `event-desk/README.md`.
