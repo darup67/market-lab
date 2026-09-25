@@ -1,0 +1,12 @@
+{"t": 1790297187.596946, "email": "watchlist", "subject": "[TEST] Watchlist briefing: 1 earnings ahead, 205 headlines", "ok": true, "test": true}
+{"t": 1790297212.543572, "email": "biopharma", "subject": "[TEST] \ud83e\uddec Bio/pharma \u00b7 ACT RXRX+NKTR+PGEN+MRNA \u00b7 events KOD, QURE, VKTX", "ok": true, "test": true}
+{"t": 1790297226.087691, "email": "communication", "subject": "[TEST] \ud83d\udce1 Communication services \u00b7 ACT META+NBIS \u00b7 events NBIS, META, VZ", "ok": true, "test": true}
+{"t": 1790297248.865101, "email": "consumer-discretionary", "subject": "[TEST] \ud83d\udecd\ufe0f Consumer discretionary \u00b7 ACT RCL+CCL \u00b7 events DRI, NKE, CCL", "ok": true, "test": true}
+{"t": 1790297270.666821, "email": "consumer-staples", "subject": "[TEST] \ud83d\uded2 Consumer staples \u00b7 ACT PM \u00b7 events COST, MKC, PEP", "ok": true, "test": true}
+{"t": 1790297284.172522, "email": "energy", "subject": "[TEST] \ud83d\udee2\ufe0f Energy \u00b7 ACT DVN+OKE+MPC \u00b7 events VLO, DVN, PSX", "ok": true, "test": true}
+{"t": 1790297307.029474, "email": "financials", "subject": "[TEST] \ud83c\udfe6 Financials \u00b7 no spread passes \u00b7 events FDS, APO, STT", "ok": true, "test": true}
+{"t": 1790297330.110979, "email": "industrials", "subject": "[TEST] \ud83c\udfed Industrials \u00b7 ACT RKLB+DAL \u00b7 events ROL, DAL, UPS", "ok": true, "test": true}
+{"t": 1790297345.77024, "email": "materials", "subject": "[TEST] \u26cf\ufe0f Materials \u00b7 no spread passes \u00b7 events BALL, MLM, IP", "ok": true, "test": true}
+{"t": 1790297361.60051, "email": "real-estate", "subject": "[TEST] \ud83c\udfe2 Real estate \u00b7 no spread passes \u00b7 events AMT, PLD, KIM", "ok": true, "test": true}
+{"t": 1790297384.837984, "email": "technology", "subject": "[TEST] \ud83d\udcbb Technology \u00b7 ACT CRWV+HPE+KLAC+P \u00b7 events ACN, JBL, P", "ok": true, "test": true}
+{"t": 1790297403.061867, "email": "utilities", "subject": "[TEST] \ud83d\udca1 Utilities \u00b7 no spread passes \u00b7 events NEE, FE, XEL", "ok": true, "test": true}

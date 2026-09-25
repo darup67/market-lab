@@ -6,6 +6,10 @@
   desk.py sector <key> [--dry]  the same email for one S&P sector (keys: market-iv-agent/profiles)
   desk.py sectors [--dry]     every sector, one email each (what launchd runs)
   desk.py jev-status          is a key in place, and how much is judged
+
+--test: subject prefixed [TEST], no waiting for handoffs, no git commit. With
+EVENTDESK_IV_ROOT=<dir>, IV data (snapshots, handoffs) is read from <dir> instead of
+~/market-iv-agent/data, for after-hours test scans kept out of the real history.
   desk.py --test-email
 
 --dry writes preview-<desk>.html and sends nothing. Read-only throughout: no
@@ -24,7 +28,25 @@ e = html.escape
 
 def cfg():
     with open(os.path.join(HERE, "config.json")) as f:
-        return json.load(f)
+        c = json.load(f)
+    root = os.environ.get("EVENTDESK_IV_ROOT")
+    if root:
+        c["biopharma"]["snapshot_dir"] = root
+        c["biopharma"]["handoff_dir"] = os.path.join(root, "handoff")
+        c["sectors"]["data_dir"] = os.path.join(root, "sectors")
+    if "--test" in sys.argv:
+        c["biopharma"]["wait_minutes"] = 0
+    return c
+
+
+SENT = os.path.join(HERE, "data", "sent.jsonl")
+
+
+def record_sent(name, subject, ok, test):
+    """One line per email attempt; the Asset Agents dashboard reads this."""
+    os.makedirs(os.path.dirname(SENT), exist_ok=True)
+    with open(SENT, "a") as f:
+        f.write(json.dumps({"t": time.time(), "email": name, "subject": subject, "ok": ok, "test": test}) + "\n")
 
 
 def log(msg):
@@ -391,6 +413,7 @@ def main():
     c = cfg()
     args = sys.argv[1:]
     dry = "--dry" in args
+    test = "--test" in args
     if "--test-email" in args:
         sys.exit(0 if send(c, "Event desk: test email", "<p>Event desk email delivery works.</p>") else 1)
     cmd = next((a for a in args if not a.startswith("--")), None)
@@ -411,7 +434,10 @@ def main():
                 f.write(body)
             log(f"dry run: {subject} -> {path}")
         else:
-            log(f"email {'sent' if send(c, subject, body) else 'FAILED'}: {subject}")
+            subject = ("[TEST] " if test else "") + subject
+            ok = send(c, subject, body)
+            record_sent(name, subject, ok, test)
+            log(f"email {'sent' if ok else 'FAILED'}: {subject}")
 
     if cmd in ("watchlist", "biopharma"):
         deliver(cmd, *(watchlist_report if cmd == "watchlist" else biopharma_report)(c))
@@ -426,7 +452,7 @@ def main():
                 deliver(k, *sector_report(c, sector_settings(c, k), deadline))
             except Exception as ex:   # one sector's failure must not stop the others
                 log(f"{k}: FAILED {ex!r}")
-    if not dry and os.environ.get("EVENTDESK_AUTOCOMMIT", "1") != "0":
+    if not dry and not test and os.environ.get("EVENTDESK_AUTOCOMMIT", "1") != "0":
         autocommit()
 
 
