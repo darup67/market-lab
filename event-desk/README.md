@@ -6,6 +6,7 @@ model) reading every headline. Read-only: no orders and no recommendations.
 | Briefing | Universe | When | launchd |
 |---|---|---|---|
 | **Watchlist** | every ticker on the TradingView watchlist: stocks, crypto, futures | daily 08:50 | `com.dhruv.eventdesk.watchlist` |
+| **10 sector emails** (technology, communication, consumer discretionary, consumer staples, financials, industrials, energy, materials, utilities, real estate) | same template as bio/pharma, per sector: 2–5 spreads, top 10 by impact, full IV report. S&P 500 + Nasdaq-100 + Dow 30 | weekdays 10:10, one email per sector | `com.dhruv.eventdesk.sectors` |
 | **Bio/pharma** (the one consolidated health-care email) | **2–5 act-on bull call spreads**, then the **top 10** names by event impact, then the IV agent's full report | weekdays 10:05 | `com.dhruv.eventdesk.bio` |
 
 Built 2026-09-24. It lives in the market-lab repo and commits and pushes
@@ -22,13 +23,13 @@ Built 2026-09-24. It lives in the market-lab repo and commits and pushes
 - **Headlines:** Yahoo Finance per-symbol RSS. Yahoo answers a full Chrome
   user agent with 429, so Yahoo requests use `Mozilla/5.0 (Macintosh)`.
 - **Earnings dates:** Nasdaq's public calendar, one call per day ahead, cached daily.
-- **Health care:** `~/biotech-iv-agent/data`: the newest snapshot (explode score, IV30,
+- **Health care:** `~/market-iv-agent/data`: the newest snapshot (explode score, IV30,
   implied move, bias, earnings) and the RTTNews FDA/trial catalyst cache. The desk reads
   these and never writes to the IV agent.
 
 ## Consolidated bio/pharma email
 
-`~/biotech-iv-agent` runs in `email_mode: "handoff"` and sends nothing itself.
+`~/market-iv-agent` runs in `email_mode: "handoff"` and sends nothing itself.
 At 10:05 this desk waits up to 25 minutes for that agent's **09:45 open-screen**
 handoff (`data/handoff/handoff.json`). If that run never arrives, it uses any run
 from today; failing that, it says the scan is missing. The email then contains:
@@ -39,6 +40,22 @@ from today; failing that, it says the scan is missing. The email then contains:
    reported as-is, never padded. Candidates that failed are listed with the reason.
 2. **Top 10 by event impact** (below).
 3. **The IV agent's full report**, embedded unchanged.
+
+## Sector emails
+
+`desk.py sectors` loops over `~/market-iv-agent/profiles/`. Each sector email is
+`sector_report()`, the same function the bio/pharma email uses, with the bio/pharma
+settings (top 10, 40 candidates, weights, wait) plus the sector's own IV data
+folder, title and emoji. Every sector waits for its own `open screen` handoff
+(`~/market-iv-agent/data/sectors/<key>/handoff`, written by the 09:53 sector scan)
+against **one shared 25-minute deadline**, so a failed scan costs one wait, not ten.
+One sector failing doesn't stop the others. Events outside health care are
+earnings plus news, since the FDA and trial calendars are health-care only.
+
+```bash
+$PY desk.py sector technology --dry
+$PY desk.py sectors --dry
+```
 
 ## Bio/pharma ranking (code-owned)
 

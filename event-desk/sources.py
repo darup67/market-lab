@@ -7,7 +7,7 @@
   whether each headline is really about the ticker.
 - Earnings dates: Nasdaq's public earnings calendar, one call per day ahead,
   cached for the day in data/earnings.json.
-- Health care: ~/biotech-iv-agent's latest snapshot CSV (explode score, IV,
+- Health care: ~/market-iv-agent's latest snapshot CSV (explode score, IV,
   bias, earnings) and its catalyst cache (RTTNews FDA and trial calendars).
 """
 import csv, datetime as dt, email.utils, json, os, re, time, urllib.request
@@ -130,7 +130,7 @@ def earnings(days, log=print):
 
 # ---------------------------------------------------------------- health care
 def iv_snapshot(snapshot_dir):
-    """Rows of the newest biotech-iv-agent snapshot, and its date."""
+    """Rows of the newest market-iv-agent snapshot, and its date."""
     d = os.path.expanduser(snapshot_dir)
     files = sorted(f for f in os.listdir(d) if re.fullmatch(r"snapshot-\d{4}-\d{2}-\d{2}\.csv", f))
     if not files:

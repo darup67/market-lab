@@ -2,7 +2,9 @@
 """Event desk: earnings/news briefings by email, with Jev reading the headlines.
 
   desk.py watchlist [--dry]   every ticker on the TradingView watchlist: earnings ahead + news
-  desk.py biopharma [--dry]   the 10 health-care names with the biggest pending event impact
+  desk.py biopharma [--dry]   health care: 2-5 act-on spreads, top 10 by event impact, full IV report
+  desk.py sector <key> [--dry]  the same email for one S&P sector (keys: market-iv-agent/profiles)
+  desk.py sectors [--dry]     every sector, one email each (what launchd runs)
   desk.py jev-status          is a key in place, and how much is judged
   desk.py --test-email
 
@@ -155,12 +157,12 @@ def watchlist_report(c):
 
 
 # ---------------------------------------------------------------- biopharma
-def wait_for_handoff(b):
-    """The IV agent's handoff for today's preferred run. Waits up to wait_minutes for it,
-    then settles for any run from today, then None."""
+def wait_for_handoff(b, deadline=None):
+    """The IV agent's handoff for today's preferred run. Waits until `deadline` (default:
+    wait_minutes from now) for it, then settles for any run from today, then None."""
     path = os.path.join(os.path.expanduser(b["handoff_dir"]), "handoff.json")
     today = dt.date.today().isoformat()
-    deadline = time.time() + b["wait_minutes"] * 60
+    deadline = deadline or time.time() + b["wait_minutes"] * 60
     m = None
     while True:
         try:
@@ -172,7 +174,7 @@ def wait_for_handoff(b):
             break
         if time.time() >= deadline:
             break
-        log(f"waiting for the IV agent's '{b['iv_run']}' handoff…")
+        log(f"waiting for the IV agent's '{b['iv_run']}' handoff ({b['title']})…")
         time.sleep(30)
     if not m or m["date"] != today:
         return None, None
@@ -188,16 +190,16 @@ def spreads_section(m, b, news):
     if not m:
         return ('<div style="background:#fdecea;padding:8px 10px;border-radius:4px;margin:12px 0">'
                 '<b>No spread tickets today:</b> the IV agent&#8217;s handoff for today is missing, so its scan '
-                'probably failed. Check <code>~/biotech-iv-agent/agent.out.log</code>.</div>')
+                'probably failed. Check <code>~/market-iv-agent/agent.out.log</code>.</div>')
     act = [t for t in m["tickets"] if t.get("act")]
     watch = [t for t in m["tickets"] if not t.get("act")]
     try:   # the rule's numbers come from the IV agent's own config, so the text can't drift from it
-        with open(os.path.join(os.path.dirname(os.path.expanduser(b["handoff_dir"])), "..", "config.json")) as f:
+        with open(os.path.expanduser(b.get("iv_config", "~/market-iv-agent/config.json"))) as f:
             sp = json.load(f)["spreads"]
         rule = (f'explode score &#8805; {sp.get("min_explode", 0)}, both legs liquid; up to {sp["act_on"]} by bias, '
                 f'${sp["budget_total"] / sp["act_on"]:,.0f} each')
     except (OSError, ValueError, KeyError):
-        rule = "see ~/biotech-iv-agent/spreads.py"
+        rule = "see ~/market-iv-agent/spreads.py"
     head = (f'<h3 style="margin:16px 0 4px">Bull call spreads to act on: {len(act)}</h3>'
             f'<div style="font-size:12px;color:#555;margin-bottom:6px">From the IV agent&#8217;s '
             f'{e(m["run"])} run ({e(m["finished"][11:16])}). Rule: Bull options-flow bias, {rule}. Probabilities are the options market&#8217;s own '
@@ -229,11 +231,31 @@ def spreads_section(m, b, news):
 
 
 def biopharma_report(c):
-    b = c["biopharma"]
-    m, iv_report = wait_for_handoff(b)
+    return sector_report(c, {**c["biopharma"], "title": "Bio/pharma", "emoji": "🧬"})
+
+
+def sector_settings(c, key):
+    """Settings for one S&P sector: the bio/pharma template's numbers, the sector's own
+    IV data folder, and its title and emoji from the market-iv-agent profile."""
+    s = c["sectors"]
+    with open(os.path.join(os.path.expanduser(s["profiles_dir"]), f"{key}.json")) as f:
+        prof = json.load(f)
+    d = os.path.join(os.path.expanduser(s["data_dir"]), key)
+    tpl = {k: v for k, v in c["biopharma"].items() if not k.startswith("_")}
+    return {**tpl, **s.get("overrides", {}), "snapshot_dir": d, "handoff_dir": os.path.join(d, "handoff"),
+            "iv_run": s["iv_run"], "title": prof["title"].removesuffix(" IV"), "emoji": prof.get("emoji", "📈")}
+
+
+def sector_keys(c):
+    d = os.path.expanduser(c["sectors"]["profiles_dir"])
+    return sorted(f[:-5] for f in os.listdir(d) if f.endswith(".json"))
+
+
+def sector_report(c, b, deadline=None):
+    m, iv_report = wait_for_handoff(b, deadline)
     rows, snap_date = sources.iv_snapshot(b["snapshot_dir"])
     if not rows:
-        raise SystemExit("no biotech-iv-agent snapshot found")
+        raise RuntimeError(f"no market-iv-agent snapshot for {b['title']}")
     cats = sources.catalysts(b["snapshot_dir"])
     today = dt.date.today()
     win = b["event_window_days"]
@@ -316,11 +338,11 @@ def biopharma_report(c):
                  f'<h3 style="margin:0 0 6px">Full IV scan · {e(m["run"])}</h3>'
                  f'<div style="font-size:12px;color:#666;margin-bottom:8px">{e(m["subject"])}</div>{iv_report}')
     acts = act_tickers
-    subject = ("🧬 Bio/pharma · " + (f"ACT {'+'.join(acts)}" if acts else "no spread passes") +
+    subject = (f"{b['emoji']} {b['title']} · " + (f"ACT {'+'.join(acts)}" if acts else "no spread passes") +
                " · events " + ", ".join(x["r"]["ticker"] for x in top[:3]))
-    sub = (f"{dt.datetime.now():%A %b %d, %I:%M %p} · from biotech-iv-agent snapshot {snap_date} "
+    sub = (f"{dt.datetime.now():%A %b %d, %I:%M %p} · from market-iv-agent snapshot {snap_date} "
            f"({len(rows)} names, {len(cand)} checked for news)")
-    return subject, page("Bio/pharma event impact: top 10", sub, body)
+    return subject, page(f"{b['title']} event impact: top 10", sub, body)
 
 
 # ---------------------------------------------------------------- delivery
@@ -376,21 +398,36 @@ def main():
         print(f"Jev key: {'present' if judge.jev_ready() else 'MISSING (python3 ~/jev-client/jev.py --set-key)'}")
         print(f"headlines stored: {len(judge._read(judge.HEADLINES))}, judged: {len(judge._read(judge.JUDGED))}")
         return
-    if cmd not in ("watchlist", "biopharma"):
+    if cmd not in ("watchlist", "biopharma", "sector", "sectors"):
         print(__doc__)
         return
-    if cmd == "biopharma" and dt.date.today().weekday() >= 5 and not dry:
+    if cmd != "watchlist" and dt.date.today().weekday() >= 5 and not dry:
         return log("weekend: no fresh IV snapshot, skipping")
-    subject, body = (watchlist_report if cmd == "watchlist" else biopharma_report)(c)
-    if dry:
-        path = os.path.join(HERE, f"preview-{cmd}.html")
-        with open(path, "w") as f:
-            f.write(body)
-        log(f"dry run: {subject} -> {path}")
+
+    def deliver(name, subject, body):
+        if dry:
+            path = os.path.join(HERE, f"preview-{name}.html")
+            with open(path, "w") as f:
+                f.write(body)
+            log(f"dry run: {subject} -> {path}")
+        else:
+            log(f"email {'sent' if send(c, subject, body) else 'FAILED'}: {subject}")
+
+    if cmd in ("watchlist", "biopharma"):
+        deliver(cmd, *(watchlist_report if cmd == "watchlist" else biopharma_report)(c))
     else:
-        log(f"email {'sent' if send(c, subject, body) else 'FAILED'}: {subject}")
-        if os.environ.get("EVENTDESK_AUTOCOMMIT", "1") != "0":
-            autocommit()
+        keys = sector_keys(c) if cmd == "sectors" else [a for a in args if not a.startswith("--")][1:2]
+        if not keys:
+            return print("usage: desk.py sector <key>   keys: " + ", ".join(sector_keys(c)))
+        # one shared deadline: a missing IV run costs one wait, not one per sector
+        deadline = time.time() + c["biopharma"]["wait_minutes"] * 60
+        for k in keys:
+            try:
+                deliver(k, *sector_report(c, sector_settings(c, k), deadline))
+            except Exception as ex:   # one sector's failure must not stop the others
+                log(f"{k}: FAILED {ex!r}")
+    if not dry and os.environ.get("EVENTDESK_AUTOCOMMIT", "1") != "0":
+        autocommit()
 
 
 if __name__ == "__main__":

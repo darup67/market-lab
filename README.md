@@ -397,5 +397,6 @@ in a window when oil trended.
 
 `event-desk/` emails two briefings: every TradingView watchlist ticker (daily 08:50:
 earnings ahead and news) and the top 10 bio/pharma names by event impact (weekdays
-10:05, built from `~/biotech-iv-agent`'s snapshot). Jev reads the headlines once a
+10:05, built from `~/market-iv-agent`'s snapshot), plus one email per S&P sector
+(weekdays 10:10, S&P 500 + Nasdaq-100 + Dow). Jev reads the headlines once a
 TypeSafe key exists. Read-only. See `event-desk/README.md`.

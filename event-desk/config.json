@@ -47,8 +47,8 @@
     }
   },
   "biopharma": {
-    "_comment": "Top 10 health-care names by event impact, from ~/biotech-iv-agent's latest snapshot. impact = weights over: explode score (priced-in event size, 0-100), proximity of the nearest dated catalyst or earnings (1 at today, 0 at event_window_days), and news intensity (Jev-judged material headlines; unjudged headlines count at half weight). Impact is about event SIZE, never direction. Since 2026-09-24 this is the ONE consolidated bio/pharma email: biotech-iv-agent runs in handoff mode and sends nothing itself; its 09:45 run's spread tickets lead this email and its full report is embedded at the end.",
-    "snapshot_dir": "~/biotech-iv-agent/data",
+    "_comment": "Top 10 health-care names by event impact, from ~/market-iv-agent's latest snapshot. impact = weights over: explode score (priced-in event size, 0-100), proximity of the nearest dated catalyst or earnings (1 at today, 0 at event_window_days), and news intensity (Jev-judged material headlines; unjudged headlines count at half weight). Impact is about event SIZE, never direction. Since 2026-09-24 this is the ONE consolidated bio/pharma email: market-iv-agent runs in handoff mode and sends nothing itself; its 09:45 run's spread tickets lead this email and its full report is embedded at the end.",
+    "snapshot_dir": "~/market-iv-agent/data",
     "top_n": 10,
     "candidates": 40,
     "event_window_days": 30,
@@ -59,7 +59,7 @@
       "event": 0.3,
       "news": 0.2
     },
-    "handoff_dir": "~/biotech-iv-agent/data/handoff",
+    "handoff_dir": "~/market-iv-agent/data/handoff",
     "iv_run": "9:45 open screen",
     "wait_minutes": 25,
     "act_min": 2
@@ -69,5 +69,12 @@
     "about_min": 0.5,
     "material_min": 0.5,
     "judge_per_run": 250
+  },
+  "sectors": {
+    "_comment": "One email per S&P sector (S&P 500 + Nasdaq-100 + Dow 30, ~517 names), each built exactly like the bio/pharma email: 2-5 act-on bull call spreads, top 10 by event impact, full IV report. Settings are the biopharma block's numbers plus overrides; each sector's data comes from ~/market-iv-agent/data/sectors/<key>/ (the IV agent run with --profile <key>). Health care stays the bio/pharma email.",
+    "profiles_dir": "~/market-iv-agent/profiles",
+    "data_dir": "~/market-iv-agent/data/sectors",
+    "iv_run": "open screen",
+    "overrides": {}
   }
 }
