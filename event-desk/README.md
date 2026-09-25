@@ -6,7 +6,7 @@ model) reading every headline. Read-only: no orders and no recommendations.
 | Briefing | Universe | When | launchd |
 |---|---|---|---|
 | **Watchlist** | every ticker on the TradingView watchlist: stocks, crypto, futures | daily 08:50 | `com.dhruv.eventdesk.watchlist` |
-| **Bio/pharma** | the **top 10** health-care names by event impact, out of ~240 scanned | weekdays 10:05 | `com.dhruv.eventdesk.bio` |
+| **Bio/pharma** (the one consolidated health-care email) | **2–5 act-on bull call spreads**, then the **top 10** names by event impact, then the IV agent's full report | weekdays 10:05 | `com.dhruv.eventdesk.bio` |
 
 Built 2026-09-24. It lives in the market-lab repo and commits and pushes
 `event-desk/data/` after each emailed run (staging only that folder;
@@ -25,6 +25,20 @@ Built 2026-09-24. It lives in the market-lab repo and commits and pushes
 - **Health care:** `~/biotech-iv-agent/data`: the newest snapshot (explode score, IV30,
   implied move, bias, earnings) and the RTTNews FDA/trial catalyst cache. The desk reads
   these and never writes to the IV agent.
+
+## Consolidated bio/pharma email
+
+`~/biotech-iv-agent` runs in `email_mode: "handoff"` and sends nothing itself.
+At 10:05 this desk waits up to 25 minutes for that agent's **09:45 open-screen**
+handoff (`data/handoff/handoff.json`). If that run never arrives, it uses any run
+from today; failing that, it says the scan is missing. The email then contains:
+
+1. **Bull call spreads to act on (2–5):** the IV agent's fixed rule. Bull bias,
+   explode score ≥ 60, both legs liquid, up to 5 by bias, $2,000 each. The rule's
+   numbers are read from the IV agent's `config.json`. Fewer than 2 passing is
+   reported as-is, never padded. Candidates that failed are listed with the reason.
+2. **Top 10 by event impact** (below).
+3. **The IV agent's full report**, embedded unchanged.
 
 ## Bio/pharma ranking (code-owned)
 

@@ -155,8 +155,82 @@ def watchlist_report(c):
 
 
 # ---------------------------------------------------------------- biopharma
+def wait_for_handoff(b):
+    """The IV agent's handoff for today's preferred run. Waits up to wait_minutes for it,
+    then settles for any run from today, then None."""
+    path = os.path.join(os.path.expanduser(b["handoff_dir"]), "handoff.json")
+    today = dt.date.today().isoformat()
+    deadline = time.time() + b["wait_minutes"] * 60
+    m = None
+    while True:
+        try:
+            with open(path) as f:
+                m = json.load(f)
+        except (OSError, ValueError):
+            m = None
+        if m and m["date"] == today and m["run"] == b["iv_run"]:
+            break
+        if time.time() >= deadline:
+            break
+        log(f"waiting for the IV agent's '{b['iv_run']}' handoff…")
+        time.sleep(30)
+    if not m or m["date"] != today:
+        return None, None
+    try:
+        with open(os.path.join(os.path.dirname(path), f"{m['date']}-{m['slug']}.html")) as f:
+            report = f.read()
+    except OSError:
+        report = None
+    return m, report
+
+
+def spreads_section(m, b, news):
+    if not m:
+        return ('<div style="background:#fdecea;padding:8px 10px;border-radius:4px;margin:12px 0">'
+                '<b>No spread tickets today:</b> the IV agent&#8217;s handoff for today is missing, so its scan '
+                'probably failed. Check <code>~/biotech-iv-agent/agent.out.log</code>.</div>')
+    act = [t for t in m["tickets"] if t.get("act")]
+    watch = [t for t in m["tickets"] if not t.get("act")]
+    try:   # the rule's numbers come from the IV agent's own config, so the text can't drift from it
+        with open(os.path.join(os.path.dirname(os.path.expanduser(b["handoff_dir"])), "..", "config.json")) as f:
+            sp = json.load(f)["spreads"]
+        rule = (f'explode score &#8805; {sp.get("min_explode", 0)}, both legs liquid; up to {sp["act_on"]} by bias, '
+                f'${sp["budget_total"] / sp["act_on"]:,.0f} each')
+    except (OSError, ValueError, KeyError):
+        rule = "see ~/biotech-iv-agent/spreads.py"
+    head = (f'<h3 style="margin:16px 0 4px">Bull call spreads to act on: {len(act)}</h3>'
+            f'<div style="font-size:12px;color:#555;margin-bottom:6px">From the IV agent&#8217;s '
+            f'{e(m["run"])} run ({e(m["finished"][11:16])}). Rule: Bull options-flow bias, {rule}. Probabilities are the options market&#8217;s own '
+            f'odds, so expected payoff is about the cost. Most expire worthless. Orders are entered by hand at '
+            f'the limit or better.</div>')
+    if len(act) < b["act_min"]:
+        head += (f'<div style="background:#fff6e0;padding:8px 10px;border-radius:4px;margin:6px 0;font-size:12.5px">'
+                 f'Only {len(act)} of {len(m["tickets"])} candidates passed today. The rule is not loosened to '
+                 f'reach {b["act_min"]}; the rest are listed below with the reason they failed.</div>')
+    rows = []
+    for t in act:
+        s = news.get(t["ticker"])
+        rows.append(
+            f'<tr><td {TD}><b>{e(t["ticker"])}</b><br><span style="color:#666;font-size:12px">{e(t.get("sector") or "")}'
+            f' · ${t["spot"]:.2f} · explode {t.get("explode", 0):.0f} · bias {t["bias"]:+.0f}</span></td>'
+            f'<td {TD}>Buy {e(t["exp"][5:])} ${t["long"]:g}C<br>Sell {e(t["exp"][5:])} ${t["short"]:g}C</td>'
+            f'<td {TD}><b>${t["limit"]:.2f}</b> × {t["qty"]}<br><span style="color:#666;font-size:12px">'
+            f'${t["cost"]:,.0f} risk · ${t["max_gain"]:,.0f} max</span></td>'
+            f'<td {TD}>BE ${t["be"]:.2f} ({t["be"] / t["spot"] - 1:+.0%})<br>P(profit) {t["p_profit"]:.0%}</td>'
+            f'<td {TD}>{e((t.get("catalysts") or "—")[:120])}</td>'
+            f'<td {TD}>{jev_cell(s) if s else "—"}</td></tr>')
+    table = (f'<table style="width:100%;border-collapse:collapse"><tr><th {TH}>Ticker</th><th {TH}>Legs</th>'
+             f'<th {TH}>Limit × qty</th><th {TH}>Odds</th><th {TH}>Catalyst</th><th {TH}>Jev</th></tr>'
+             f'{"".join(rows)}</table>') if act else ""
+    why = "".join(f'<div>{e(t["ticker"])}: {e((t.get("fail") or "not in the top 5")[:90])}</div>' for t in watch)
+    watch_html = (f'<details style="margin-top:6px;font-size:12px;color:#666"><summary>Watch only: '
+                  f'{len(watch)} candidates that did not pass</summary>{why}</details>') if watch else ""
+    return head + table + watch_html
+
+
 def biopharma_report(c):
     b = c["biopharma"]
+    m, iv_report = wait_for_handoff(b)
     rows, snap_date = sources.iv_snapshot(b["snapshot_dir"])
     if not rows:
         raise SystemExit("no biotech-iv-agent snapshot found")
@@ -201,7 +275,9 @@ def biopharma_report(c):
     W = b["weights"]
     cand.sort(key=lambda x: -(W["score"] * x["score"] / 100 + W["event"] * x["prox"]))
     cand = cand[: b["candidates"]]
-    news = collect_news(cand, b["news_lookback_hours"], c)
+    act_tickers = [t["ticker"] for t in (m or {}).get("tickets", []) if t.get("act")]
+    extra = [{"id": t, "yahoo": t, "name": t} for t in act_tickers if t not in {x["id"] for x in cand}]
+    news = collect_news(cand + extra, b["news_lookback_hours"], c)
     ready = judge.jev_ready()
     for x in cand:
         s = news[x["id"]]
@@ -226,6 +302,8 @@ def biopharma_report(c):
             f'<td {TD}>{jev_cell(s)}</td>'
             f'<td {TD}>{news_cell(s, b["headlines_per_ticker"])}</td></tr>')
     body = jev_banner(ready)
+    body += spreads_section(m, b, news)
+    body += '<h3 style="margin:22px 0 4px">Top 10 by event impact</h3>'
     body += ('<p style="font-size:12px;color:#555;margin:0 0 10px">Ranked by <b>impact</b>: the IV agent&#8217;s '
              f'explode score ({W["score"]:.0%}), how soon the next dated catalyst or earnings lands ({W["event"]:.0%}), '
              f'and news intensity ({W["news"]:.0%}). Impact measures how big the pending event looks, '
@@ -233,7 +311,13 @@ def biopharma_report(c):
     body += (f'<table style="width:100%;border-collapse:collapse"><tr><th {TH}>Ticker</th><th {TH}>Impact</th>'
              f'<th {TH}>Next event</th><th {TH}>Options</th><th {TH}>Jev</th><th {TH}>Headlines</th></tr>'
              f'{"".join(trs)}</table>')
-    subject = "Bio/pharma events: top 10 · " + ", ".join(x["r"]["ticker"] for x in top[:4]) + " …"
+    if iv_report:
+        body += ('<hr style="margin:28px 0 10px;border:0;border-top:3px solid #111">'
+                 f'<h3 style="margin:0 0 6px">Full IV scan · {e(m["run"])}</h3>'
+                 f'<div style="font-size:12px;color:#666;margin-bottom:8px">{e(m["subject"])}</div>{iv_report}')
+    acts = act_tickers
+    subject = ("🧬 Bio/pharma · " + (f"ACT {'+'.join(acts)}" if acts else "no spread passes") +
+               " · events " + ", ".join(x["r"]["ticker"] for x in top[:3]))
     sub = (f"{dt.datetime.now():%A %b %d, %I:%M %p} · from biotech-iv-agent snapshot {snap_date} "
            f"({len(rows)} names, {len(cand)} checked for news)")
     return subject, page("Bio/pharma event impact: top 10", sub, body)

@@ -1,40 +1,69 @@
 {
   "_comment": "Event desk: earnings/news briefings by email. Read-only; nothing here trades or recommends trades. Jev (TypeSafe) reads headlines once a key is in the Keychain (service typesafe-jev); until then the emails run on code alone and say so.",
-
   "email": {
     "to": "darup67@gmail.com",
     "keychain_account": "darup67@gmail.com",
     "keychain_service": "flip-notifier-gmail"
   },
-
   "watchlist": {
     "_comment": "Every ticker on the TradingView watchlist, read from flip-notifier's expected-symbols.json. The flip-watchlist-sync task rewrites that file from the live watchlist each weekday 08:33, so it holds the watchlist's first 25 symbols (the Scanner's slot count).",
     "symbols_file": "~/flip-notifier/expected-symbols.json",
     "news_lookback_hours": 24,
     "earnings_horizon_days": 14,
     "headlines_per_ticker": 3,
-    "yahoo_overrides": {"MCL1!": "CL=F", "MES1!": "ES=F", "MNQ1!": "NQ=F", "MYM1!": "YM=F", "MGCV2026": "GC=F"},
+    "yahoo_overrides": {
+      "MCL1!": "CL=F",
+      "MES1!": "ES=F",
+      "MNQ1!": "NQ=F",
+      "MYM1!": "YM=F",
+      "MGCV2026": "GC=F"
+    },
     "names": {
-      "HOOD": "Robinhood", "MSTR": "Strategy (MicroStrategy)", "MU": "Micron Technology", "NBIS": "Nebius Group",
-      "ORCL": "Oracle", "PLTR": "Palantir", "SOXL": "Direxion 3x semiconductor ETF", "SPCX": "SPCX",
-      "SQQQ": "ProShares 3x short Nasdaq-100 ETF", "TQQQ": "ProShares 3x Nasdaq-100 ETF",
-      "BTC": "Bitcoin", "ETH": "Ether", "SOL": "Solana", "XRP": "XRP", "ADA": "Cardano", "BNB": "BNB",
-      "HYPE": "Hyperliquid", "LINK": "Chainlink", "NEAR": "NEAR Protocol", "ZEC": "Zcash",
-      "CL=F": "crude oil", "ES=F": "S&P 500", "NQ=F": "Nasdaq-100", "YM=F": "Dow Jones", "GC=F": "gold"
+      "HOOD": "Robinhood",
+      "MSTR": "Strategy (MicroStrategy)",
+      "MU": "Micron Technology",
+      "NBIS": "Nebius Group",
+      "ORCL": "Oracle",
+      "PLTR": "Palantir",
+      "SOXL": "Direxion 3x semiconductor ETF",
+      "SPCX": "SPCX",
+      "SQQQ": "ProShares 3x short Nasdaq-100 ETF",
+      "TQQQ": "ProShares 3x Nasdaq-100 ETF",
+      "BTC": "Bitcoin",
+      "ETH": "Ether",
+      "SOL": "Solana",
+      "XRP": "XRP",
+      "ADA": "Cardano",
+      "BNB": "BNB",
+      "HYPE": "Hyperliquid",
+      "LINK": "Chainlink",
+      "NEAR": "NEAR Protocol",
+      "ZEC": "Zcash",
+      "CL=F": "crude oil",
+      "ES=F": "S&P 500",
+      "NQ=F": "Nasdaq-100",
+      "YM=F": "Dow Jones",
+      "GC=F": "gold"
     }
   },
-
   "biopharma": {
-    "_comment": "Top 10 health-care names by event impact, from ~/biotech-iv-agent's latest snapshot. impact = weights over: explode score (priced-in event size, 0-100), proximity of the nearest dated catalyst or earnings (1 at today, 0 at event_window_days), and news intensity (Jev-judged material headlines; unjudged headlines count at half weight). Impact is about event SIZE, never direction.",
+    "_comment": "Top 10 health-care names by event impact, from ~/biotech-iv-agent's latest snapshot. impact = weights over: explode score (priced-in event size, 0-100), proximity of the nearest dated catalyst or earnings (1 at today, 0 at event_window_days), and news intensity (Jev-judged material headlines; unjudged headlines count at half weight). Impact is about event SIZE, never direction. Since 2026-09-24 this is the ONE consolidated bio/pharma email: biotech-iv-agent runs in handoff mode and sends nothing itself; its 09:45 run's spread tickets lead this email and its full report is embedded at the end.",
     "snapshot_dir": "~/biotech-iv-agent/data",
     "top_n": 10,
     "candidates": 40,
     "event_window_days": 30,
     "news_lookback_hours": 36,
     "headlines_per_ticker": 2,
-    "weights": {"score": 0.5, "event": 0.3, "news": 0.2}
+    "weights": {
+      "score": 0.5,
+      "event": 0.3,
+      "news": 0.2
+    },
+    "handoff_dir": "~/biotech-iv-agent/data/handoff",
+    "iv_run": "9:45 open screen",
+    "wait_minutes": 25,
+    "act_min": 2
   },
-
   "jev": {
     "_comment": "Per-headline judgments. Thresholds are for the email labels only; every raw answer is logged in data/judged.jsonl for later scoring.",
     "about_min": 0.5,
