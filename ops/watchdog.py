@@ -236,7 +236,7 @@ def check_watchlist():
 
 
 def check_scans():
-    if after("09:58"):
+    if after("10:02"):
         if handoff_today(os.path.join(IV, "data")):
             note("health care scan", "ok", "done")
         elif not job("com.dhruv.healthiv.open")["running"] and attempt("health-scan", 1):
@@ -244,7 +244,7 @@ def check_scans():
             kick("com.dhruv.healthiv.open")
         else:
             note("health care scan", "warn", "not done yet")
-    if after("10:03"):
+    if after("10:06"):
         missing = [k for k in sector_keys() if not handoff_today(os.path.join(IV, "data", "sectors", k))]
         if not missing:
             note("sector scans", "ok", "all 10 done")
