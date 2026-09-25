@@ -5,6 +5,8 @@
   desk.py biopharma [--dry]   health care: 2-5 act-on spreads, top 10 by event impact, full IV report
   desk.py sector <key> [--dry]  the same email for one S&P sector (keys: market-iv-agent/profiles)
   desk.py sectors [--dry]     every sector, one email each (what launchd runs)
+  desk.py sectors --missing   only sectors with no email sent today (the watchdog's catch-up)
+  desk.py outbox              retry emails Gmail refused earlier (the watchdog runs this)
   desk.py jev-status          is a key in place, and how much is judged
 
 --test: subject prefixed [TEST], no waiting for handoffs, no git commit. With
@@ -23,6 +25,10 @@ from email.mime.text import MIMEText
 import judge, sources
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "..", "ops"))
+import marketday  # noqa: E402  (NYSE calendar shared with the IV agent and the watchdog)
+
+OUTBOX = os.path.join(HERE, "data", "outbox")
 e = html.escape
 
 
@@ -34,8 +40,8 @@ def cfg():
         c["biopharma"]["snapshot_dir"] = root
         c["biopharma"]["handoff_dir"] = os.path.join(root, "handoff")
         c["sectors"]["data_dir"] = os.path.join(root, "sectors")
-    if "--test" in sys.argv:
-        c["biopharma"]["wait_minutes"] = 0
+    if "--test" in sys.argv or "--no-wait" in sys.argv:
+        c["biopharma"]["wait_minutes"] = 0   # catch-up runs: the scan either finished or it didn't
     return c
 
 
@@ -384,8 +390,54 @@ def send(c, subject, body_html):
             return True
         except Exception as ex:
             log(f"email attempt {i + 1} failed: {ex!r}")
-            time.sleep(5 * (i + 1))
+            time.sleep(10 * (i + 1))
     return False
+
+
+def queue(name, subject, body, test):
+    """Park an email Gmail refused, so `desk.py outbox` (run by the watchdog) can resend it."""
+    os.makedirs(OUTBOX, exist_ok=True)
+    path = os.path.join(OUTBOX, f"{int(time.time())}-{name}.json")
+    with open(path, "w") as f:
+        json.dump({"name": name, "subject": subject, "body": body, "test": test, "queued": time.time()}, f)
+    log(f"queued for retry: {path}")
+
+
+def flush_outbox(c):
+    if not os.path.isdir(OUTBOX):
+        return 0
+    n = 0
+    for fn in sorted(os.listdir(OUTBOX)):
+        path = os.path.join(OUTBOX, fn)
+        try:
+            with open(path) as f:
+                q = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if send(c, q["subject"], q["body"]):
+            record_sent(q["name"], q["subject"], True, q["test"])
+            os.remove(path)
+            n += 1
+            log(f"outbox: sent {q['subject']}")
+        else:
+            log(f"outbox: still failing, kept {fn}")
+            break   # Gmail still down; the next watchdog pass tries again
+    return n
+
+
+def sent_today():
+    """Names of emails already delivered today (real sends, not tests)."""
+    today = dt.date.today()
+    out = set()
+    try:
+        with open(SENT) as f:
+            for line in f:
+                r = json.loads(line)
+                if r["ok"] and not r.get("test") and dt.date.fromtimestamp(r["t"]) == today:
+                    out.add(r["email"])
+    except (OSError, ValueError):
+        pass
+    return out
 
 
 def autocommit():
@@ -417,6 +469,8 @@ def main():
     if "--test-email" in args:
         sys.exit(0 if send(c, "Event desk: test email", "<p>Event desk email delivery works.</p>") else 1)
     cmd = next((a for a in args if not a.startswith("--")), None)
+    if cmd == "outbox":
+        return log(f"outbox: {flush_outbox(c)} sent")
     if cmd == "jev-status":
         print(f"Jev key: {'present' if judge.jev_ready() else 'MISSING (python3 ~/jev-client/jev.py --set-key)'}")
         print(f"headlines stored: {len(judge._read(judge.HEADLINES))}, judged: {len(judge._read(judge.JUDGED))}")
@@ -424,8 +478,8 @@ def main():
     if cmd not in ("watchlist", "biopharma", "sector", "sectors"):
         print(__doc__)
         return
-    if cmd != "watchlist" and dt.date.today().weekday() >= 5 and not dry:
-        return log("weekend: no fresh IV snapshot, skipping")
+    if cmd != "watchlist" and not marketday.is_trading_day() and not dry:
+        return log("market closed today (weekend or NYSE holiday): no fresh IV scan, skipping")
 
     def deliver(name, subject, body):
         if dry:
@@ -438,11 +492,24 @@ def main():
             ok = send(c, subject, body)
             record_sent(name, subject, ok, test)
             log(f"email {'sent' if ok else 'FAILED'}: {subject}")
+            if not ok:
+                queue(name, subject, body, test)
 
+    failed = []
     if cmd in ("watchlist", "biopharma"):
-        deliver(cmd, *(watchlist_report if cmd == "watchlist" else biopharma_report)(c))
+        try:
+            deliver(cmd, *(watchlist_report if cmd == "watchlist" else biopharma_report)(c))
+        except Exception as ex:
+            failed.append(cmd)
+            log(f"{cmd}: BUILD FAILED {ex!r}")
+            if not dry:
+                record_sent(cmd, f"BUILD FAILED: {ex!r}"[:300], False, test)
     else:
         keys = sector_keys(c) if cmd == "sectors" else [a for a in args if not a.startswith("--")][1:2]
+        if "--missing" in args:
+            done = sent_today()
+            keys = [k for k in keys if k not in done]
+            log(f"catch-up: {len(keys)} sector email(s) not yet sent today: {', '.join(keys) or 'none'}")
         if not keys:
             return print("usage: desk.py sector <key>   keys: " + ", ".join(sector_keys(c)))
         # one shared deadline: a missing IV run costs one wait, not one per sector
@@ -451,9 +518,14 @@ def main():
             try:
                 deliver(k, *sector_report(c, sector_settings(c, k), deadline))
             except Exception as ex:   # one sector's failure must not stop the others
+                failed.append(k)
                 log(f"{k}: FAILED {ex!r}")
+                if not dry:
+                    record_sent(k, f"BUILD FAILED: {ex!r}"[:300], False, test)
     if not dry and not test and os.environ.get("EVENTDESK_AUTOCOMMIT", "1") != "0":
         autocommit()
+    if failed:
+        sys.exit(1)   # non-zero so launchctl and the watchdog see it
 
 
 if __name__ == "__main__":
