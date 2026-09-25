@@ -60,7 +60,7 @@
       "news": 0.2
     },
     "handoff_dir": "~/market-iv-agent/data/handoff",
-    "iv_run": "9:45 open screen",
+    "iv_run": "late-morning screen",
     "wait_minutes": 25,
     "act_min": 2
   },
@@ -74,7 +74,7 @@
     "_comment": "One email per S&P sector (S&P 500 + Nasdaq-100 + Dow 30, ~517 names), each built exactly like the bio/pharma email: 2-5 act-on bull call spreads, top 10 by event impact, full IV report. Settings are the biopharma block's numbers plus overrides; each sector's data comes from ~/market-iv-agent/data/sectors/<key>/ (the IV agent run with --profile <key>). Health care stays the bio/pharma email.",
     "profiles_dir": "~/market-iv-agent/profiles",
     "data_dir": "~/market-iv-agent/data/sectors",
-    "iv_run": "open screen",
+    "iv_run": "late-morning screen",
     "overrides": {}
   }
 }

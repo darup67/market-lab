@@ -11,10 +11,10 @@ instead. It never re-sends an email that already went out.
 | outbox (Gmail refused a send) | every pass | `desk.py outbox` resends | after 12:00 |
 | Zillow digest | 07:50 daily | re-run `com.dhruv.zillowagent`, max 2 | 09:00 |
 | Watchlist email | 09:05 daily | re-run the watchlist job, max 2 | 10:00 |
-| Health care IV scan | 10:02 trading days | re-run the 09:52 scan once | (the email then says the scan is missing) |
-| Sector IV scans (10) | 10:06 trading days | re-run `run-sectors.sh` once | (same) |
-| Bio/pharma email | 10:45 trading days | catch-up send, max 2 | 11:30 |
-| Sector emails (10) | 10:50 trading days | send only the missing sectors, max 2 | 11:45 |
+| Health care IV scan | 11:02 trading days | re-run the 10:52 scan once | (the email then says the scan is missing) |
+| Sector IV scans (10) | 11:06 trading days | re-run `run-sectors.sh` once | (same) |
+| Bio/pharma email | 11:45 trading days | catch-up send, max 2 | 12:30 |
+| Sector emails (10) | 11:50 trading days | send only the missing sectors, max 2 | 12:45 |
 | Flip notifier | every pass 09:15–16:15 on trading days, hourly otherwise | `healthcheck.js --repair` | BROKEN during market hours, at most every 2 h |
 | NYSE holiday list | yearly | none | when the current year is missing |
 

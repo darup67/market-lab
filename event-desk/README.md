@@ -6,8 +6,8 @@ model) reading every headline. Read-only: no orders and no recommendations.
 | Briefing | Universe | When | launchd |
 |---|---|---|---|
 | **Watchlist** | every ticker on the TradingView watchlist: stocks, crypto, futures | daily 08:50 | `com.dhruv.eventdesk.watchlist` |
-| **10 sector emails** (technology, communication, consumer discretionary, consumer staples, financials, industrials, energy, materials, utilities, real estate) | same template as bio/pharma, per sector: 2–5 spreads, top 10 by impact, full IV report. S&P 500 + Nasdaq-100 + Dow 30 | weekdays 10:10, one email per sector | `com.dhruv.eventdesk.sectors` |
-| **Bio/pharma** (the one consolidated health-care email) | **2–5 act-on bull call spreads**, then the **top 10** names by event impact, then the IV agent's full report | weekdays 10:05 | `com.dhruv.eventdesk.bio` |
+| **10 sector emails** (technology, communication, consumer discretionary, consumer staples, financials, industrials, energy, materials, utilities, real estate) | same template as bio/pharma, per sector: 2–5 spreads, top 10 by impact, full IV report. S&P 500 + Nasdaq-100 + Dow 30 | weekdays 11:10, one email per sector | `com.dhruv.eventdesk.sectors` |
+| **Bio/pharma** (the one consolidated health-care email) | **2–5 act-on bull call spreads**, then the **top 10** names by event impact, then the IV agent's full report | weekdays 11:05 | `com.dhruv.eventdesk.bio` |
 
 Built 2026-09-24. It lives in the market-lab repo and commits and pushes
 `event-desk/data/` after each emailed run (staging only that folder;
@@ -30,7 +30,7 @@ Built 2026-09-24. It lives in the market-lab repo and commits and pushes
 ## Consolidated bio/pharma email
 
 `~/market-iv-agent` runs in `email_mode: "handoff"` and sends nothing itself.
-At 10:05 this desk waits up to 25 minutes for that agent's **09:45 open-screen**
+At 11:05 this desk waits up to 25 minutes for that agent's **10:52 late-morning screen**
 handoff (`data/handoff/handoff.json`). If that run never arrives, it uses any run
 from today; failing that, it says the scan is missing. The email then contains:
 

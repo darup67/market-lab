@@ -236,7 +236,7 @@ def check_watchlist():
 
 
 def check_scans():
-    if after("10:02"):
+    if after("11:02"):
         if handoff_today(os.path.join(IV, "data")):
             note("health care scan", "ok", "done")
         elif not job("com.dhruv.healthiv.open")["running"] and attempt("health-scan", 1):
@@ -244,7 +244,7 @@ def check_scans():
             kick("com.dhruv.healthiv.open")
         else:
             note("health care scan", "warn", "not done yet")
-    if after("10:06"):
+    if after("11:06"):
         missing = [k for k in sector_keys() if not handoff_today(os.path.join(IV, "data", "sectors", k))]
         if not missing:
             note("sector scans", "ok", "all 10 done")
@@ -257,7 +257,7 @@ def check_scans():
 
 def check_market_emails():
     done = sent_today()
-    if after("10:45"):
+    if after("11:45"):
         if "biopharma" in done:
             note("bio/pharma email", "ok", "sent today")
         elif job("com.dhruv.eventdesk.bio")["running"]:
@@ -267,9 +267,9 @@ def check_market_emails():
             spawn([PY, "desk.py", "biopharma", "--no-wait"], "catchup.log")
         else:
             note("bio/pharma email", "fail", "not sent after 2 catch-ups")
-            if after("11:30"):
+            if after("12:30"):
                 alert("bio-email", "Bio/pharma email not sent today", tail(os.path.join(DESK, "biopharma.out.log")))
-    if after("10:50"):
+    if after("11:50"):
         missing = [k for k in sector_keys() if k not in done]
         if not missing:
             note("sector emails", "ok", "all 10 sent")
@@ -280,7 +280,7 @@ def check_market_emails():
             spawn([PY, "desk.py", "sectors", "--missing", "--no-wait"], "catchup.log")
         else:
             note("sector emails", "fail", f"still missing {', '.join(missing)}")
-            if after("11:45"):
+            if after("12:45"):
                 alert("sector-emails", f"{len(missing)} sector email(s) not sent today", ", ".join(missing) + "\n\n" +
                       tail(os.path.join(DESK, "sectors.out.log")))
 
