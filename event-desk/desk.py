@@ -7,6 +7,7 @@
   desk.py sectors [--dry]     every sector, one email each (what launchd runs)
   desk.py sectors --missing   only sectors with no email sent today (the watchdog's catch-up)
   desk.py outbox              retry emails Gmail refused earlier (the watchdog runs this)
+  --prefix "[After hours]"    put a label in front of the subject (on-demand runs)
   desk.py jev-status          is a key in place, and how much is judged
 
 --test: subject prefixed [TEST], no waiting for handoffs, no git commit. With
@@ -468,6 +469,9 @@ def main():
     test = "--test" in args
     if "--test-email" in args:
         sys.exit(0 if send(c, "Event desk: test email", "<p>Event desk email delivery works.</p>") else 1)
+    if "--prefix" in args:   # its value is not a command
+        i = args.index("--prefix")
+        args = args[:i] + args[i + 2:] + args[i:i + 2]
     cmd = next((a for a in args if not a.startswith("--")), None)
     if cmd == "outbox":
         return log(f"outbox: {flush_outbox(c)} sent")
@@ -488,7 +492,8 @@ def main():
                 f.write(body)
             log(f"dry run: {subject} -> {path}")
         else:
-            subject = ("[TEST] " if test else "") + subject
+            prefix = next((args[i + 1] for i, x in enumerate(args[:-1]) if x == "--prefix"), None)
+            subject = ("[TEST] " if test else "") + (f"{prefix} " if prefix else "") + subject
             ok = send(c, subject, body)
             record_sent(name, subject, ok, test)
             log(f"email {'sent' if ok else 'FAILED'}: {subject}")
