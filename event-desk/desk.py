@@ -225,14 +225,19 @@ def spreads_section(m, b, news):
     try:   # the rule's numbers come from the IV agent's own config, so the text can't drift from it
         with open(os.path.expanduser(b.get("iv_config", "~/market-iv-agent/config.json"))) as f:
             sp = json.load(f)["spreads"]
-        rule = (f'explode score &#8805; {sp.get("min_explode", 0)}, both legs liquid; up to {sp["act_on"]} by bias, '
-                f'${sp["budget_total"] / sp["act_on"]:,.0f} each')
+        rule = (f'explode score &#8805; {sp.get("min_explode", 0)}, '
+                + (f'market odds of profit &#8805; {sp.get("min_p_profit", 0):.0%} (breakeven at or below today&#8217;s '
+                   f'price), max gain &#8805; {sp.get("min_reward_risk", 0)}&#215; risk, '
+                   if sp.get("construction", "odds") == "odds" else "")
+                + f'both legs liquid; up to {sp["act_on"]} by bias, ${sp["budget_total"] / sp["act_on"]:,.0f} max loss each')
     except (OSError, ValueError, KeyError):
         rule = "see ~/market-iv-agent/spreads.py"
     head = (f'<h3 style="margin:16px 0 4px">Bull call spreads to act on: {len(act)}</h3>'
             f'<div style="font-size:12px;color:#555;margin-bottom:6px">From the IV agent&#8217;s '
             f'{e(m["run"])} run ({e(m["finished"][11:16])}). Rule: Bull options-flow bias, {rule}. Probabilities are the options market&#8217;s own '
-            f'odds, so expected payoff is about the cost. Most expire worthless. Orders are entered by hand at '
+            f'odds, so expected payoff is about the cost: higher odds come with a smaller win. The most any spread '
+            f'can lose is its debit. &#9888; = earnings or a catalyst can land before expiry (more binary). Orders are '
+            f'entered by hand at '
             f'the limit or better.</div>')
     if len(act) < b["act_min"]:
         head += (f'<div style="background:#fff6e0;padding:8px 10px;border-radius:4px;margin:6px 0;font-size:12.5px">'
@@ -242,12 +247,13 @@ def spreads_section(m, b, news):
     for t in act:
         s = news.get(t["ticker"])
         rows.append(
-            f'<tr><td {TD}><b>{e(t["ticker"])}</b><br><span style="color:#666;font-size:12px">{e(t.get("sector") or "")}'
+            f'<tr><td {TD}><b>{e(t["ticker"])}</b>{" &#9888;" if t.get("event_before_exp") else ""}<br><span style="color:#666;font-size:12px">{e(t.get("sector") or "")}'
             f' · ${t["spot"]:.2f} · explode {t.get("explode", 0):.0f} · bias {t["bias"]:+.0f}</span></td>'
             f'<td {TD}>Buy {e(t["exp"][5:])} ${t["long"]:g}C<br>Sell {e(t["exp"][5:])} ${t["short"]:g}C</td>'
             f'<td {TD}><b>${t["limit"]:.2f}</b> × {t["qty"]}<br><span style="color:#666;font-size:12px">'
             f'${t["cost"]:,.0f} risk · ${t["max_gain"]:,.0f} max</span></td>'
-            f'<td {TD}>BE ${t["be"]:.2f} ({t["be"] / t["spot"] - 1:+.0%})<br>P(profit) {t["p_profit"]:.0%}</td>'
+            f'<td {TD}>BE ${t["be"]:.2f} ({t["be"] / t["spot"] - 1:+.1%})<br>P(profit) <b>{t["p_profit"]:.0%}</b>'
+            f' · max {t["max_gain"] / t["cost"]:.2f}&#215;</td>'
             f'<td {TD}>{e((t.get("catalysts") or "—")[:120])}</td>'
             f'<td {TD}>{jev_cell(s) if s else "—"}</td></tr>')
     table = (f'<table style="width:100%;border-collapse:collapse"><tr><th {TH}>Ticker</th><th {TH}>Legs</th>'
