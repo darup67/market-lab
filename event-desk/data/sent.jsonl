@@ -15,3 +15,13 @@
 {"t": 1790300936.996362, "email": "technology", "subject": "[After hours] \ud83d\udcbb Technology \u00b7 ACT CRWV+HPE+NTAP+KLAC+SMCI \u00b7 events ACN, JBL, MU", "ok": true, "test": false}
 {"t": 1790340654.5971708, "email": "watchlist", "subject": "Watchlist briefing: 1 earnings ahead, 203 headlines", "ok": true, "test": false}
 {"t": 1790348734.525876, "email": "biopharma", "subject": "\ud83e\uddec Bio/pharma \u00b7 no spread passes \u00b7 events PRAX, QURE, NEOG", "ok": true, "test": false}
+{"t": 1790349018.7414138, "email": "communication", "subject": "\ud83d\udce1 Communication services \u00b7 ACT NBIS \u00b7 events PSKY, CMCSA, OMC", "ok": true, "test": false}
+{"t": 1790349047.21413, "email": "consumer-discretionary", "subject": "\ud83d\udecd\ufe0f Consumer discretionary \u00b7 no spread passes \u00b7 events NKE, CCL, HLT", "ok": true, "test": false}
+{"t": 1790349072.4489112, "email": "consumer-staples", "subject": "\ud83d\uded2 Consumer staples \u00b7 no spread passes \u00b7 events MKC, PEP, PM", "ok": true, "test": false}
+{"t": 1790349087.9088562, "email": "energy", "subject": "\ud83d\udee2\ufe0f Energy \u00b7 no spread passes \u00b7 events VLO, MPC, PSX", "ok": true, "test": false}
+{"t": 1790349116.121086, "email": "financials", "subject": "\ud83c\udfe6 Financials \u00b7 ACT HOOD \u00b7 events FDS, STT, BLK", "ok": true, "test": false}
+{"t": 1790349143.8668969, "email": "industrials", "subject": "\ud83c\udfed Industrials \u00b7 ACT DAL+RKLB+GE \u00b7 events SNA, DAL, FAST", "ok": true, "test": false}
+{"t": 1790349163.23361, "email": "materials", "subject": "\u26cf\ufe0f Materials \u00b7 no spread passes \u00b7 events PPG, STLD, LYB", "ok": true, "test": false}
+{"t": 1790349183.260303, "email": "real-estate", "subject": "\ud83c\udfe2 Real estate \u00b7 no spread passes \u00b7 events PLD, CPT, CBRE", "ok": true, "test": false}
+{"t": 1790349212.382594, "email": "technology", "subject": "\ud83d\udcbb Technology \u00b7 ACT ARM+ALAB+CRWV+SMCI+CTSH \u00b7 events JBL, ACN, MU", "ok": true, "test": false}
+{"t": 1790349235.485846, "email": "utilities", "subject": "\ud83d\udca1 Utilities \u00b7 no spread passes \u00b7 events FE, XEL, AWK", "ok": true, "test": false}
