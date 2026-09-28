@@ -310,7 +310,7 @@ def check_flip(trading):
         else:
             note("headless flip", "ok", last.split("  ", 1)[-1][:120])
         # Matrix report at 08:00 and 16:30 daily: re-send if the latest slot was missed.
-        slots = [s for s in ("08:00", "16:30") if after(s)]
+        slots = [s for s in ("08:55", "16:30") if after(s)]
         if slots and NOW.hour * 60 + NOW.minute - int(slots[-1][:2]) * 60 - int(slots[-1][3:]) >= 15:
             slot = dt.datetime.combine(TODAY, dt.time(int(slots[-1][:2]), int(slots[-1][3:])))
             try:

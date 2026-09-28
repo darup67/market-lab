@@ -1,5 +1,7 @@
 {
   "_comment": "Event desk: earnings/news briefings by email. Read-only; nothing here trades or recommends trades. Jev (TypeSafe) reads headlines once a key is in the Keychain (service typesafe-jev); until then the emails run on code alone and say so.",
+  "consolidate": true,
+  "_consolidate": "2026-09-28 (user): fewer emails. true = watchlist goes into the headless watcher's 08:55 morning brief, and bio/pharma + 10 sectors go out as ONE digest after the 11:10 sectors run. false = the old one-email-per-section behaviour.",
   "email": {
     "to": "darup67@gmail.com",
     "keychain_account": "darup67@gmail.com",

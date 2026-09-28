@@ -422,7 +422,8 @@ def flush_outbox(c):
         except (OSError, ValueError):
             continue
         if send(c, q["subject"], q["body"]):
-            record_sent(q["name"], q["subject"], True, q["test"])
+            for n in q["name"].split(","):
+                record_sent(n, q["subject"], True, q["test"])
             os.remove(path)
             n += 1
             log(f"outbox: sent {q['subject']}")
@@ -430,6 +431,45 @@ def flush_outbox(c):
             log(f"outbox: still failing, kept {fn}")
             break   # Gmail still down; the next watchdog pass tries again
     return n
+
+
+DIGEST = os.path.join(HERE, "data", "digest")
+
+
+def save_section(name, subject, body):
+    d = os.path.join(DIGEST, dt.date.today().isoformat())
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, f"{name}.json"), "w") as f:
+        json.dump({"name": name, "subject": subject, "body": body, "t": time.time()}, f)
+
+
+def send_digest(c, test):
+    """One email with bio/pharma + every sector saved today and not yet delivered."""
+    d = os.path.join(DIGEST, dt.date.today().isoformat())
+    done = sent_today()
+    items = []
+    for fn in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        with open(os.path.join(d, fn)) as f:
+            it = json.load(f)
+        if it["name"] != "watchlist" and it["name"] not in done:
+            items.append(it)
+    if not items:
+        return log("digest: nothing new to send")
+    items.sort(key=lambda it: (it["name"] != "biopharma", it["name"]))
+    toc = "".join(f'<li><a href="#{e(it["name"])}">{e(it["subject"])}</a></li>' for it in items)
+    body = (f'<div style="font-family:-apple-system,Helvetica,Arial,sans-serif;max-width:900px;margin:0 auto;padding:14px">'
+            f'<h2 style="margin:0">Market digest · {dt.date.today():%a %b %d}</h2>'
+            f'<div style="color:#666;font-size:12.5px">{len(items)} sections in one email (was {len(items)} separate emails).</div>'
+            f'<ol style="font-size:13px">{toc}</ol></div>'
+            + "".join(f'<a name="{e(it["name"])}"></a><hr style="border:0;border-top:2px solid #ddd;margin:26px 0">{it["body"]}' for it in items))
+    subject = ("[TEST] " if test else "") + f"Market digest: {len(items)} sections (bio/pharma + sectors)"
+    names = [it["name"] for it in items]
+    ok = send(c, subject, body)
+    for n in names:
+        record_sent(n, subject, ok, test)
+    log(f"digest {'sent' if ok else 'FAILED'}: {len(items)} sections")
+    if not ok:
+        queue(",".join(names), subject, body, test)
 
 
 def sent_today():
@@ -491,7 +531,18 @@ def main():
     if cmd != "watchlist" and not marketday.is_trading_day() and not dry:
         return log("market closed today (weekend or NYSE holiday): no fresh IV scan, skipping")
 
+    consolidate = c.get("consolidate", False) and not dry and not test
+
     def deliver(name, subject, body):
+        if consolidate:
+            # Fewer emails (user, 2026-09-28): sections are saved and go out together. The watchlist
+            # rides in the headless watcher's 08:55 morning brief; bio/pharma + the 10 sectors go out
+            # as ONE digest at the end of the sectors run.
+            save_section(name, subject, body)
+            if name == "watchlist":
+                record_sent(name, subject + " (in morning brief)", True, test)
+            log(f"saved for {'morning brief' if name == 'watchlist' else 'digest'}: {subject}")
+            return
         if dry:
             path = os.path.join(HERE, f"preview-{name}.html")
             with open(path, "w") as f:
@@ -533,6 +584,8 @@ def main():
                 log(f"{k}: FAILED {ex!r}")
                 if not dry:
                     record_sent(k, f"BUILD FAILED: {ex!r}"[:300], False, test)
+    if consolidate and cmd in ("sector", "sectors"):
+        send_digest(c, test)
     if not dry and not test and os.environ.get("EVENTDESK_AUTOCOMMIT", "1") != "0":
         autocommit()
     if failed:
