@@ -291,6 +291,24 @@ def check_flip(trading):
         return   # off hours: hourly is enough
     if DRY:
         return note("flip notifier", "ok", "DRY: healthcheck not run")
+    if os.path.exists(os.path.join(FLIP, "CHART_WATCHER_PAUSED")):
+        # Chart watcher retired in favour of headless-flip.js (runs :01 :03 :31 :33).
+        # healthcheck.js --repair would reload TradingView and re-flag the missing Scanner.
+        log = os.path.join(FLIP, "headless-flip.log")
+        try:
+            last = open(log).read().rstrip().split("\n")[-1]
+            age = time.time() - os.path.getmtime(log)
+        except OSError:
+            last, age = "no log", 1e9
+        if age > 40 * 60 or "FATAL" in last or "mode live" not in last:
+            note("headless flip", "fail", f"last run {int(age // 60)}m ago: {last[-160:]}")
+            alert("headless-flip", "Headless flip watcher not running cleanly",
+                  f"Last log line ({int(age // 60)} min old):\n{last}\n\n~/flip-notifier/headless-flip.log", every_hours=2)
+        elif " ERR " in last:
+            note("headless flip", "warn", last.split(" · ERR ")[-1][:160])
+        else:
+            note("headless flip", "ok", last.split("  ", 1)[-1][:120])
+        return
     try:
         r = subprocess.run([NODE, "healthcheck.js", "--repair"], cwd=FLIP, capture_output=True, text=True, timeout=120)
         code, out = r.returncode, (r.stdout + r.stderr)
