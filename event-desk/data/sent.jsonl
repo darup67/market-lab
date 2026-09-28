@@ -29,3 +29,13 @@
 {"t": 1790513462.736077, "email": "watchlist", "subject": "Watchlist briefing: 1 earnings ahead, 109 headlines", "ok": true, "test": false}
 {"t": 1790599862.646443, "email": "watchlist", "subject": "Watchlist briefing: 1 earnings ahead, 170 headlines", "ok": true, "test": false}
 {"t": 1790607932.001615, "email": "biopharma", "subject": "\ud83e\uddec Bio/pharma \u00b7 no spread passes \u00b7 events QURE, MRK, UNH", "ok": true, "test": false}
+{"t": 1790608221.3608801, "email": "communication", "subject": "\ud83d\udce1 Communication services \u00b7 ACT NBIS+GOOGL+META \u00b7 events PSKY, T, NBIS", "ok": true, "test": false}
+{"t": 1790608248.325848, "email": "consumer-discretionary", "subject": "\ud83d\udecd\ufe0f Consumer discretionary \u00b7 ACT TSLA \u00b7 events NKE, CCL, DPZ", "ok": true, "test": false}
+{"t": 1790608271.792881, "email": "consumer-staples", "subject": "\ud83d\uded2 Consumer staples \u00b7 no spread passes \u00b7 events MKC, PEP, CL", "ok": true, "test": false}
+{"t": 1790608287.181503, "email": "energy", "subject": "\ud83d\udee2\ufe0f Energy \u00b7 no spread passes \u00b7 events VLO, HAL, PSX", "ok": true, "test": false}
+{"t": 1790608354.2837381, "email": "financials", "subject": "\ud83c\udfe6 Financials \u00b7 ACT HOOD \u00b7 events FDS, BLK, JPM", "ok": true, "test": false}
+{"t": 1790608380.1143858, "email": "industrials", "subject": "\ud83c\udfed Industrials \u00b7 no spread passes \u00b7 events DAL, FAST, JBHT", "ok": true, "test": false}
+{"t": 1790608397.550841, "email": "materials", "subject": "\u26cf\ufe0f Materials \u00b7 no spread passes \u00b7 events AVY, FCX, STLD", "ok": true, "test": false}
+{"t": 1790608414.9011588, "email": "real-estate", "subject": "\ud83c\udfe2 Real estate \u00b7 no spread passes \u00b7 events PLD, DOC, O", "ok": true, "test": false}
+{"t": 1790608441.694704, "email": "technology", "subject": "\ud83d\udcbb Technology \u00b7 ACT ALAB+LRCX+STX+MU \u00b7 events ACN, MU, JBL", "ok": true, "test": false}
+{"t": 1790608462.593663, "email": "utilities", "subject": "\ud83d\udca1 Utilities \u00b7 no spread passes \u00b7 events DTE, CEG, NRG", "ok": true, "test": false}
