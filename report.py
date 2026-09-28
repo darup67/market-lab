@@ -455,7 +455,7 @@ def main():
         env = {**os.environ, "FLIP_GMAIL_APP_PASSWORD": pw, "SEND_EMAIL_TIMEOUT_MS": "90000"}
         for n in range(tries):
             try:
-                r = subprocess.run(["node", SEND, subj, text], capture_output=True,
+                r = subprocess.run([os.path.expanduser("~/.local/bin/node"), SEND, subj, text], capture_output=True,
                                    text=True, timeout=120, env=env)
                 err = None if r.returncode == 0 else (r.stderr or r.stdout).strip()[:300]
             except subprocess.TimeoutExpired:

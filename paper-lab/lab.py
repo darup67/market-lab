@@ -206,7 +206,7 @@ def main():
         text = report(c)
         print(text)
         if "--email" in sys.argv:
-            r = subprocess.run(["node", os.path.expanduser("~/flip-notifier/send-email.js"),
+            r = subprocess.run([os.path.expanduser("~/.local/bin/node"), os.path.expanduser("~/flip-notifier/send-email.js"),
                                 f"Paper lab weekly: rules v{c['rules_version']}", text],
                                capture_output=True, text=True, timeout=90)
             log("email " + ("sent" if r.returncode == 0 else f"FAILED {r.stderr[-200:]}"))
