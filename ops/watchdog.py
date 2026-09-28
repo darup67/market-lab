@@ -342,6 +342,85 @@ def check_flip(trading):
                   "healthcheck.js --repair could not fix it:\n\n" + out[-2500:], every_hours=2)
 
 
+# ---------- platform checks (added 2026-09-28 after the coin-launch scorer failed silently for 2 days) ----------
+
+DEPS = os.path.join(HERE, "deps")
+VENVS = {   # name: (python, extra env the LaunchAgents set)
+    "market-ml": (os.path.join(HOME, ".venvs", "market-ml", "bin", "python"),
+                  {"DYLD_FALLBACK_LIBRARY_PATH": os.path.join(HOME, ".venvs/market-ml/lib/python3.11/site-packages/torch/lib")}),
+    "market-iv": (os.path.join(HOME, "market-iv-agent", ".venv", "bin", "python"), {}),
+}
+PINS = {    # symlink: exact target it must resolve to
+    os.path.join(HOME, ".local", "bin", "node"): os.path.join(HOME, ".local/opt/node-v22.22.3/bin/node"),
+    os.path.join(HOME, ".venvs", "market-ml", "bin", "python"): os.path.join(HOME, ".local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3.11"),
+    os.path.join(HOME, "market-iv-agent", ".venv", "bin", "python"): os.path.join(HOME, ".local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3.11"),
+}
+KEEPALIVE_OK = {-15, -9}   # a long-running agent restarted by launchd reports its predecessor's signal
+
+
+def check_agents():
+    """Any com.dhruv.* LaunchAgent whose last run exited non-zero on two consecutive passes."""
+    out = subprocess.run(["launchctl", "list"], capture_output=True, text=True).stdout
+    fails, seen = {}, state.setdefault("agent_fail", {})
+    for line in out.splitlines():
+        parts = line.split("\t")
+        if len(parts) != 3 or not parts[2].startswith("com.dhruv."):
+            continue
+        pid, code, label = parts
+        try:
+            code = int(code)
+        except ValueError:
+            continue
+        if code == 0 or (pid != "-" and code in KEEPALIVE_OK):
+            seen.pop(label, None)
+            continue
+        seen[label] = seen.get(label, 0) + 1
+        if seen[label] >= 2:
+            fails[label] = code
+    if fails:
+        desc = ", ".join(f"{k.replace('com.dhruv.', '')} (exit {v})" for k, v in sorted(fails.items()))
+        note("launch agents", "fail", desc)
+        alert("agents-failing", f"{len(fails)} background job(s) failing", "Last exit non-zero on consecutive watchdog passes:\n\n" +
+              "\n".join(f"{k}: exit {v}" for k, v in sorted(fails.items())) + "\n\nCheck each job's err.log.", every_hours=6)
+    else:
+        note("launch agents", "ok", "all com.dhruv.* last exits clean")
+
+
+def check_platform():
+    """Hourly: pinned interpreters still resolve, every venv package still imports, disk has room."""
+    if NOW.minute >= 15 and not os.environ.get("WATCHDOG_FORCE_PLATFORM"):
+        return
+    problems = []
+    for link, want in PINS.items():
+        got = os.path.realpath(link)
+        if got != os.path.realpath(want) or not os.path.exists(got):
+            problems.append(f"{link} -> {got} (pinned {want})")
+    for name, (py, env) in VENVS.items():
+        base_f = os.path.join(DEPS, f"{name}.import-baseline.json")
+        try:
+            r = subprocess.run([py, os.path.join(DEPS, "import_check.py"), "--json"], capture_output=True, text=True,
+                               timeout=900, env={**os.environ, **env})
+            res = json.loads(r.stdout.strip().splitlines()[-1])
+        except Exception as ex:
+            problems.append(f"{name}: import check could not run ({ex!r})")
+            continue
+        now_fail = {f"{f['dist']}:{f['module']}": f["error"] for f in res["fails"]}
+        if not os.path.exists(base_f):
+            save(base_f, sorted(now_fail))   # first run records today's known-harmless failures
+            continue
+        new = {k: v for k, v in now_fail.items() if k not in set(jload(base_f, []))}
+        problems += [f"{name}: {k} now fails: {v}" for k, v in new.items()]
+    free_gb = os.statvfs(HOME).f_bavail * os.statvfs(HOME).f_frsize / 1e9
+    if free_gb < 15:
+        problems.append(f"disk: only {free_gb:.0f} GB free")
+    if problems:
+        note("platform", "fail", "; ".join(problems)[:300])
+        alert("platform", "Dependency / platform problem", "\n".join(problems) +
+              "\n\nPins and lock files: ~/market-lab/ops/deps/ (README.md has the restore steps).", every_hours=6)
+    else:
+        note("platform", "ok", f"pins intact, imports match baseline, {free_gb:.0f} GB free")
+
+
 def daily_confirmation(trading):
     """Once a day, a short email confirming what was delivered: 12/12 on trading days
     (watchlist + bio/pharma + 10 sectors), the watchlist alone otherwise. Sent on the
@@ -399,6 +478,11 @@ def main():
         check_flip(trading)
     except Exception as ex:
         note("flip notifier", "fail", f"watchdog error {ex!r}")
+    for fn in (check_agents, check_platform):
+        try:
+            fn()
+        except Exception as ex:
+            note(fn.__name__, "fail", f"watchdog error {ex!r}")
     if not marketday.calendar_ok(TODAY):
         note("calendar", "fail", f"nyse_holidays.json has no {TODAY.year} dates")
         alert("calendar", f"NYSE holiday list needs {TODAY.year}",

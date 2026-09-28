@@ -1,0 +1,15 @@
+[
+ "fugue:fugue_dask",
+ "fugue:fugue_duckdb",
+ "fugue:fugue_ibis",
+ "fugue:fugue_notebook",
+ "fugue:fugue_polars",
+ "fugue:fugue_ray",
+ "fugue:fugue_spark",
+ "fugue:fugue_test",
+ "sentencepiece:sentencepiece/__init__",
+ "sentencepiece:sentencepiece/_version",
+ "sentencepiece:sentencepiece/sentencepiece_model_pb2",
+ "sentencepiece:sentencepiece/sentencepiece_pb2",
+ "wrapt:wrapt-stubs"
+]
