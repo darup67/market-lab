@@ -387,7 +387,7 @@ def check_agents():
 
 
 def check_platform():
-    """Hourly: pinned interpreters still resolve, every venv package still imports, disk has room."""
+    """Hourly: pinned interpreters still resolve and disk has room; daily (07:00): every venv package still imports."""
     if NOW.minute >= 15 and not os.environ.get("WATCHDOG_FORCE_PLATFORM"):
         return
     problems = []
@@ -395,7 +395,9 @@ def check_platform():
         got = os.path.realpath(link)
         if got != os.path.realpath(want) or not os.path.exists(got):
             problems.append(f"{link} -> {got} (pinned {want})")
-    for name, (py, env) in VENVS.items():
+    # The full import check costs ~40 CPU-s and ~0.5 GB: once a day from 07:00 (or when forced).
+    imports_due = os.environ.get("WATCHDOG_FORCE_PLATFORM") or (after("07:00") and state.get("imports_checked") != TODAY.isoformat())
+    for name, (py, env) in (VENVS.items() if imports_due else []):
         base_f = os.path.join(DEPS, f"{name}.import-baseline.json")
         try:
             r = subprocess.run([py, os.path.join(DEPS, "import_check.py"), "--json"], capture_output=True, text=True,
@@ -410,6 +412,8 @@ def check_platform():
             continue
         new = {k: v for k, v in now_fail.items() if k not in set(jload(base_f, []))}
         problems += [f"{name}: {k} now fails: {v}" for k, v in new.items()]
+    if imports_due:
+        state["imports_checked"] = TODAY.isoformat()
     free_gb = os.statvfs(HOME).f_bavail * os.statvfs(HOME).f_frsize / 1e9
     if free_gb < 15:
         problems.append(f"disk: only {free_gb:.0f} GB free")
@@ -418,7 +422,7 @@ def check_platform():
         alert("platform", "Dependency / platform problem", "\n".join(problems) +
               "\n\nPins and lock files: ~/market-lab/ops/deps/ (README.md has the restore steps).", every_hours=6)
     else:
-        note("platform", "ok", f"pins intact, imports match baseline, {free_gb:.0f} GB free")
+        note("platform", "ok", f"pins intact, imports {'match baseline' if imports_due else 'checked daily'}, {free_gb:.0f} GB free")
 
 
 def daily_confirmation(trading):
