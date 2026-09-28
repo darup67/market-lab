@@ -308,6 +308,20 @@ def check_flip(trading):
             note("headless flip", "warn", last.split(" · ERR ")[-1][:160])
         else:
             note("headless flip", "ok", last.split("  ", 1)[-1][:120])
+        # Matrix report at 08:00 and 16:30 daily: re-send if the latest slot was missed.
+        slots = [s for s in ("08:00", "16:30") if after(s)]
+        if slots and NOW.hour * 60 + NOW.minute - int(slots[-1][:2]) * 60 - int(slots[-1][3:]) >= 15:
+            slot = dt.datetime.combine(TODAY, dt.time(int(slots[-1][:2]), int(slots[-1][3:])))
+            try:
+                sent = dt.datetime.fromisoformat(json.load(open(os.path.join(FLIP, "headless-matrix.json")))["sentAt"].replace("Z", "+00:00"))
+                sent = sent.astimezone().replace(tzinfo=None)
+            except (OSError, ValueError, KeyError):
+                sent = dt.datetime.min
+            if sent < slot:
+                note("flip matrix", "warn", f"{slots[-1]} report missing — re-sending")
+                subprocess.run([NODE, "headless-flip.js", "--matrix"], cwd=FLIP, capture_output=True, timeout=120)
+            else:
+                note("flip matrix", "ok", f"{slots[-1]} report sent {sent:%H:%M}")
         return
     try:
         r = subprocess.run([NODE, "healthcheck.js", "--repair"], cwd=FLIP, capture_output=True, text=True, timeout=120)
