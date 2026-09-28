@@ -143,7 +143,7 @@ def alert(key, subject, body, every_hours=6):
         pw = subprocess.run(["security", "find-generic-password", "-a", MAIL["account"], "-s", MAIL["service"], "-w"],
                             capture_output=True, text=True, check=True).stdout.strip()
         msg = MIMEText(f"<pre style='font-size:13px'>{body}</pre>", "html", "utf-8")
-        msg["Subject"] = Header(f"⚠️ Watchdog: {subject}", "utf-8")
+        msg["Subject"] = Header(subject if subject.startswith("✅") else f"⚠️ Watchdog: {subject}", "utf-8")
         msg["From"] = f"Agent Watchdog <{MAIL['account']}>"
         msg["To"] = MAIL["to"]
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context(), timeout=30) as s:
@@ -309,6 +309,25 @@ def check_flip(trading):
                   "healthcheck.js --repair could not fix it:\n\n" + out[-2500:], every_hours=2)
 
 
+def daily_confirmation(trading):
+    """Once a day, a short email confirming what was delivered: 12/12 on trading days
+    (watchlist + bio/pharma + 10 sectors), the watchlist alone otherwise. Sent on the
+    first pass after 12:05, after the watchdog's own catch-ups (11:45/11:50) have run."""
+    if not after("12:05") or state.get("confirmed") == TODAY.isoformat():
+        return
+    done = sent_today()
+    expected = ["watchlist"] + (["biopharma"] + sector_keys() if trading else [])
+    missing = [e for e in expected if e not in done]
+    ok = len(expected) - len(missing)
+    subject = (f"{ok}/{len(expected)} emails delivered today" if not missing
+               else f"{ok}/{len(expected)} emails delivered, missing: {', '.join(missing)}")
+    body = "\n".join(f"{'OK     ' if e in done else 'MISSING'}  {e}" for e in expected)
+    state["confirmed"] = TODAY.isoformat()
+    state["alerted"].pop("daily-confirmation", None)
+    alert("daily-confirmation", ("✅ " if not missing else "") + subject, body, every_hours=0)
+    note("daily confirmation", "ok" if not missing else "fail", subject)
+
+
 def tail(path, n=15):
     try:
         with open(path, errors="ignore") as f:
@@ -338,6 +357,11 @@ def main():
                 fn()
             except Exception as ex:
                 note(fn.__name__, "fail", f"watchdog error {ex!r}")
+    if ARMED:
+        try:
+            daily_confirmation(trading)
+        except Exception as ex:
+            note("daily confirmation", "fail", f"watchdog error {ex!r}")
     try:
         check_flip(trading)
     except Exception as ex:
