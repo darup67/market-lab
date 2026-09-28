@@ -7,9 +7,9 @@ Written 2026-09-28, after the coin-launch scorer failed silently for 2 days. The
 | Runtime | Pinned to | Used by |
 |---|---|---|
 | Node **v22.22.3** | `~/.local/bin/node` → `~/.local/opt/node-v22.22.3/bin/node` (own copy; was borrowed from `~/.hermes`) | flip-notifier (headless + kalshi watcher), zillow-agent, market-lab recorders |
-| Python **3.11.15** (uv) | venv `bin/python` → `~/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none` (exact patch, not the floating `cpython-3.11` alias) | `~/.venvs/market-ml`, `~/market-iv-agent/.venv` |
+| Python **3.11.15** (uv) | venv `bin/python` → `~/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none` (exact patch, not the floating `cpython-3.11` alias) | `~/.venvs/market-ml` (market-iv-agent merged in on 2026-09-28; its old `.venv` is kept as `.venv.retired-20260928` for rollback) |
 | `~/.venvs/market-ml` packages | `market-ml.lock.txt` (122 packages) | coin-launch, event-desk, paper-lab, kalshi-btc, watchdog |
-| market-iv packages | `~/market-iv-agent/requirements.lock.txt` | market-iv-agent |
+| market-iv packages | merged into `market-ml.lock.txt` (yfinance 1.7.0, openpyxl 3.1.5, installed with the lock as a constraint, so nothing existing changed) | market-iv-agent |
 | OpenMP (`libomp`) | torch's bundled copy: coinlaunch LaunchAgents set `DYLD_FALLBACK_LIBRARY_PATH=<venv>/…/torch/lib` | LightGBM, XGBoost |
 
 ## Watchdog coverage (`ops/watchdog.py`)

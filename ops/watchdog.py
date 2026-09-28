@@ -12,7 +12,7 @@ alert only when repair has failed. It never duplicates an email that already wen
   sector scans  trading days, all handoffs by 10:03 -> re-run run-sectors.sh once
   bio email     trading days, sent by 10:45 -> catch-up send, max 2
   sector emails trading days, all sent by 10:50 -> send only the missing ones, max 2
-  flip notifier healthcheck.js --repair every pass 09:15-16:15 on trading days, hourly
+  headless flip watcher log freshness + matrix/brief catch-up (chart watcher retired 2026-09-28)
                 otherwise; alerts on BROKEN during market hours only
   calendar      alerts once if nyse_holidays.json no longer covers this year
 
@@ -290,56 +290,38 @@ def check_flip(trading):
     if not market_hours and NOW.minute >= 15:
         return   # off hours: hourly is enough
     if DRY:
-        return note("flip notifier", "ok", "DRY: healthcheck not run")
-    if os.path.exists(os.path.join(FLIP, "CHART_WATCHER_PAUSED")):
-        # Chart watcher retired in favour of headless-flip.js (runs :01 :03 :31 :33).
-        # healthcheck.js --repair would reload TradingView and re-flag the missing Scanner.
-        log = os.path.join(FLIP, "headless-flip.log")
-        try:
-            runs = [l for l in open(log).read().rstrip().split("\n") if " MATRIX " not in l]
-            last = runs[-1]   # ignore matrix-report lines; judge the flip runs
-            age = time.time() - dt.datetime.fromisoformat(last.split()[0].replace("Z", "+00:00")).timestamp()
-        except OSError:
-            last, age = "no log", 1e9
-        if age > 40 * 60 or "FATAL" in last or "mode live" not in last:
-            note("headless flip", "fail", f"last run {int(age // 60)}m ago: {last[-160:]}")
-            alert("headless-flip", "Headless flip watcher not running cleanly",
-                  f"Last log line ({int(age // 60)} min old):\n{last}\n\n~/flip-notifier/headless-flip.log", every_hours=2)
-        elif " ERR " in last:
-            note("headless flip", "warn", last.split(" · ERR ")[-1][:160])
-        else:
-            note("headless flip", "ok", last.split("  ", 1)[-1][:120])
-        # Matrix report at 08:00 and 16:30 daily: re-send if the latest slot was missed.
-        slots = [s for s in ("08:55", "16:30") if after(s)]
-        if slots and NOW.hour * 60 + NOW.minute - int(slots[-1][:2]) * 60 - int(slots[-1][3:]) >= 15:
-            slot = dt.datetime.combine(TODAY, dt.time(int(slots[-1][:2]), int(slots[-1][3:])))
-            try:
-                sent = dt.datetime.fromisoformat(json.load(open(os.path.join(FLIP, "headless-matrix.json")))["sentAt"].replace("Z", "+00:00"))
-                sent = sent.astimezone().replace(tzinfo=None)
-            except (OSError, ValueError, KeyError):
-                sent = dt.datetime.min
-            if sent < slot:
-                note("flip matrix", "warn", f"{slots[-1]} report missing — re-sending")
-                subprocess.run([NODE, "headless-flip.js", "--matrix"], cwd=FLIP, capture_output=True, timeout=120)
-            else:
-                note("flip matrix", "ok", f"{slots[-1]} report sent {sent:%H:%M}")
-        return
+        return note("headless flip", "ok", "DRY: not checked")
+    # The chart-based flip watcher was retired 2026-09-28; the headless watcher is the only one.
+    log = os.path.join(FLIP, "headless-flip.log")
     try:
-        r = subprocess.run([NODE, "healthcheck.js", "--repair"], cwd=FLIP, capture_output=True, text=True, timeout=120)
-        code, out = r.returncode, (r.stdout + r.stderr)
-    except subprocess.TimeoutExpired:
-        code, out = 2, "healthcheck.js timed out after 120s"
-    if "reloaded by --repair" in out:
-        note("flip notifier", "warn", "LaunchAgent had stopped; healthcheck reloaded it")
-    if code == 0:
-        note("flip notifier", "ok", "HEALTHY")
-    elif code == 1:
-        note("flip notifier", "warn", "DEGRADED (see healthcheck)")
+        runs = [l for l in open(log).read().rstrip().split("\n") if " MATRIX " not in l]
+        last = runs[-1]   # ignore matrix-report lines; judge the flip runs
+        age = time.time() - dt.datetime.fromisoformat(last.split()[0].replace("Z", "+00:00")).timestamp()
+    except OSError:
+        last, age = "no log", 1e9
+    if age > 40 * 60 or "FATAL" in last or "mode live" not in last:
+        note("headless flip", "fail", f"last run {int(age // 60)}m ago: {last[-160:]}")
+        alert("headless-flip", "Headless flip watcher not running cleanly",
+              f"Last log line ({int(age // 60)} min old):\n{last}\n\n~/flip-notifier/headless-flip.log", every_hours=2)
+    elif " ERR " in last:
+        note("headless flip", "warn", last.split(" · ERR ")[-1][:160])
     else:
-        note("flip notifier", "fail", "BROKEN")
-        if market_hours:
-            alert("flip-broken", "Flip notifier BROKEN during market hours",
-                  "healthcheck.js --repair could not fix it:\n\n" + out[-2500:], every_hours=2)
+        note("headless flip", "ok", last.split("  ", 1)[-1][:120])
+    # Briefs at 08:55 and 16:30 daily: re-send if the latest slot was missed.
+    slots = [s for s in ("08:55", "16:30") if after(s)]
+    if slots and NOW.hour * 60 + NOW.minute - int(slots[-1][:2]) * 60 - int(slots[-1][3:]) >= 15:
+        slot = dt.datetime.combine(TODAY, dt.time(int(slots[-1][:2]), int(slots[-1][3:])))
+        try:
+            sent = dt.datetime.fromisoformat(json.load(open(os.path.join(FLIP, "headless-matrix.json")))["sentAt"].replace("Z", "+00:00"))
+            sent = sent.astimezone().replace(tzinfo=None)
+        except (OSError, ValueError, KeyError):
+            sent = dt.datetime.min
+        if sent < slot:
+            note("flip matrix", "warn", f"{slots[-1]} report missing — re-sending")
+            subprocess.run([NODE, "headless-flip.js", "--matrix"], cwd=FLIP, capture_output=True, timeout=120)
+        else:
+            note("flip matrix", "ok", f"{slots[-1]} report sent {sent:%H:%M}")
+    return
 
 
 # ---------- platform checks (added 2026-09-28 after the coin-launch scorer failed silently for 2 days) ----------
@@ -348,12 +330,10 @@ DEPS = os.path.join(HERE, "deps")
 VENVS = {   # name: (python, extra env the LaunchAgents set)
     "market-ml": (os.path.join(HOME, ".venvs", "market-ml", "bin", "python"),
                   {"DYLD_FALLBACK_LIBRARY_PATH": os.path.join(HOME, ".venvs/market-ml/lib/python3.11/site-packages/torch/lib")}),
-    "market-iv": (os.path.join(HOME, "market-iv-agent", ".venv", "bin", "python"), {}),
 }
 PINS = {    # symlink: exact target it must resolve to
     os.path.join(HOME, ".local", "bin", "node"): os.path.join(HOME, ".local/opt/node-v22.22.3/bin/node"),
     os.path.join(HOME, ".venvs", "market-ml", "bin", "python"): os.path.join(HOME, ".local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3.11"),
-    os.path.join(HOME, "market-iv-agent", ".venv", "bin", "python"): os.path.join(HOME, ".local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3.11"),
 }
 KEEPALIVE_OK = {-15, -9}   # a long-running agent restarted by launchd reports its predecessor's signal
 
