@@ -339,7 +339,7 @@ KEEPALIVE_OK = {-15, -9}   # a long-running agent restarted by launchd reports i
 
 
 def check_agents():
-    """Any com.dhruv.* LaunchAgent whose last run exited non-zero on two consecutive passes."""
+    """Any com.dhruv.* LaunchAgent that exited non-zero on two separate runs in a row."""
     out = subprocess.run(["launchctl", "list"], capture_output=True, text=True).stdout
     fails, seen = {}, state.setdefault("agent_fail", {})
     for line in out.splitlines():
@@ -354,8 +354,16 @@ def check_agents():
         if code == 0 or (pid != "-" and code in KEEPALIVE_OK):
             seen.pop(label, None)
             continue
-        seen[label] = seen.get(label, 0) + 1
-        if seen[label] >= 2:
+        # Count failed RUNS, not watchdog passes: an hourly job's single blip (e.g. a 40 s network
+        # outage, futures 2026-09-28 19:30) stays "exit 1" across several 15-minute passes.
+        runs = subprocess.run(["launchctl", "print", f"gui/{os.getuid()}/{label}"], capture_output=True, text=True).stdout
+        n = next((int(l.split("=")[1]) for l in runs.splitlines() if l.strip().startswith("runs =")), None)
+        rec = seen.get(label) if isinstance(seen.get(label), dict) else {"runs": [], "code": code}
+        if n is not None and n not in rec["runs"]:
+            rec["runs"] = (rec["runs"] + [n])[-5:]
+        rec["code"] = code
+        seen[label] = rec
+        if len(rec["runs"]) >= 2:
             fails[label] = code
     if fails:
         desc = ", ".join(f"{k.replace('com.dhruv.', '')} (exit {v})" for k, v in sorted(fails.items()))
