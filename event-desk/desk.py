@@ -286,8 +286,13 @@ def sector_keys(c):
     return sorted(f[:-5] for f in os.listdir(d) if f.endswith(".json"))
 
 
+_LAST_ACTS = []   # ACT tickets of the section just built; deliver() takes them into the digest
+
+
 def sector_report(c, b, deadline=None):
+    global _LAST_ACTS
     m, iv_report = wait_for_handoff(b, deadline)
+    _LAST_ACTS = [dict(t, sector_title=b["title"], emoji=b.get("emoji", "📈")) for t in (m or {}).get("tickets", []) if t.get("act")]
     rows, snap_date = sources.iv_snapshot(b["snapshot_dir"])
     if not rows:
         raise RuntimeError(f"no market-iv-agent snapshot for {b['title']}")
@@ -436,11 +441,50 @@ def flush_outbox(c):
 DIGEST = os.path.join(HERE, "data", "digest")
 
 
-def save_section(name, subject, body):
+def save_section(name, subject, body, acts=None):
     d = os.path.join(DIGEST, dt.date.today().isoformat())
     os.makedirs(d, exist_ok=True)
     with open(os.path.join(d, f"{name}.json"), "w") as f:
-        json.dump({"name": name, "subject": subject, "body": body, "t": time.time()}, f)
+        json.dump({"name": name, "subject": subject, "body": body, "acts": acts or [], "t": time.time()}, f)
+
+
+def act_table(items):
+    """'Actionable now' across every sector: each ACT spread, its order ticket, and that sector's
+    ledger record (graded at expiry against the market's own odds, after costs)."""
+    import sys
+    sys.path.insert(0, os.path.expanduser("~/trade-core"))
+    try:
+        import trade_core
+    except Exception:
+        trade_core = None
+    ev = trade_core.evidence() if trade_core else {}
+    rows = []
+    for it in items:
+        for t in it.get("acts", []):
+            tk = trade_core.option_ticket(t) if trade_core else None
+            if trade_core:
+                trade_core.add_spread(it["name"], t, tk)
+            g = (ev.get("groups", {}).get(f"market-iv|spread:{it['name']}") or {}).get("*")
+            rec = (f'{g["n"]} graded · {g["win"]:.0%} profitable vs {g["baseline"]:.0%} market odds' + (" · PROVEN" if g.get("proven") else "")
+                   ) if g else "no graded spreads yet"
+            tcell = (f'🎫 <b>{e(tk["id"])}</b><br><span style="font-size:11px;color:#666">say &#8220;place ticket {e(tk["id"])}&#8221;</span>'
+                     if tk else "—")
+            rows.append(
+                f'<tr><td {TD}>{e(t.get("emoji", ""))} <b>{e(t["ticker"])}</b>{" &#9888;" if t.get("event_before_exp") else ""}'
+                f'<br><span style="color:#666;font-size:12px">{e(t.get("sector_title", it["name"]))} · ${t["spot"]:.2f}</span></td>'
+                f'<td {TD}>Buy {e(t["exp"][5:])} ${t["long"]:g}C / Sell ${t["short"]:g}C<br><b>${t["limit"]:.2f}</b> × {t["qty"]}'
+                f' · risk ${t["cost"]:,.0f} · max ${t["max_gain"]:,.0f}</td>'
+                f'<td {TD}>P(profit) <b>{t["p_profit"]:.0%}</b><br>BE ${t["be"]:.2f} ({t["be"] / t["spot"] - 1:+.1%})</td>'
+                f'<td {TD}>{tcell}</td>'
+                f'<td {TD}><span style="font-size:12px">{e(rec)}</span></td></tr>')
+    if not rows:
+        return ('<div style="background:#f3f3f3;padding:8px 10px;border-radius:4px;margin:10px 0">'
+                '<b>Actionable now: none.</b> No sector had a bull call spread pass the rules today.</div>')
+    return (f'<h3 style="margin:14px 0 4px">&#9989; Actionable now: {len(rows)} spread{"s" if len(rows) != 1 else ""} across sectors</h3>'
+            f'<table style="width:100%;border-collapse:collapse"><tr><th {TH}>Ticker</th><th {TH}>Order</th><th {TH}>Odds</th>'
+            f'<th {TH}>Ticket</th><th {TH}>Sector record</th></tr>{"".join(rows)}</table>'
+            '<div style="font-size:11.5px;color:#666">Tickets are never placed automatically; placing one means a broker preview you confirm. '
+            '&#9888; = earnings or a catalyst can land before expiry. Each spread is logged to the trade-core ledger and graded at expiry.</div>')
 
 
 def send_digest(c, test):
@@ -457,12 +501,14 @@ def send_digest(c, test):
         return log("digest: nothing new to send")
     items.sort(key=lambda it: (it["name"] != "biopharma", it["name"]))
     toc = "".join(f'<li><a href="#{e(it["name"])}">{e(it["subject"])}</a></li>' for it in items)
+    acts = [t["ticker"] for it in items for t in it.get("acts", [])]
     body = (f'<div style="font-family:-apple-system,Helvetica,Arial,sans-serif;max-width:900px;margin:0 auto;padding:14px">'
             f'<h2 style="margin:0">Market digest · {dt.date.today():%a %b %d}</h2>'
             f'<div style="color:#666;font-size:12.5px">{len(items)} sections in one email (was {len(items)} separate emails).</div>'
-            f'<ol style="font-size:13px">{toc}</ol></div>'
+            f'{act_table(items)}<ol style="font-size:13px">{toc}</ol></div>'
             + "".join(f'<a name="{e(it["name"])}"></a><hr style="border:0;border-top:2px solid #ddd;margin:26px 0">{it["body"]}' for it in items))
-    subject = ("[TEST] " if test else "") + f"Market digest: {len(items)} sections (bio/pharma + sectors)"
+    subject = (("[TEST] " if test else "") + "📈 Market digest · " + (f"ACT {'+'.join(acts)}" if acts else "no spread passes")
+               + f" · {len(items)} sections")
     names = [it["name"] for it in items]
     ok = send(c, subject, body)
     for n in names:
@@ -538,7 +584,9 @@ def main():
             # Fewer emails (user, 2026-09-28): sections are saved and go out together. The watchlist
             # rides in the headless watcher's 08:55 morning brief; bio/pharma + the 10 sectors go out
             # as ONE digest at the end of the sectors run.
-            save_section(name, subject, body)
+            acts = list(_LAST_ACTS) if name != "watchlist" else []
+            _LAST_ACTS.clear()
+            save_section(name, subject, body, acts)
             if name == "watchlist":
                 record_sent(name, subject + " (in morning brief)", True, test)
             log(f"saved for {'morning brief' if name == 'watchlist' else 'digest'}: {subject}")
