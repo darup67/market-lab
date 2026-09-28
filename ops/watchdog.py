@@ -405,6 +405,71 @@ def check_platform():
         note("platform", "ok", f"pins intact, imports {'match baseline' if imports_due else 'checked daily'}, {free_gb:.0f} GB free")
 
 
+REPOS = ["asset-agents", "coin-launch-agent", "flip-notifier", "flux-lab", "jev-client", "kalshi-btc-agent",
+         "market-iv-agent", "market-lab", "portfolio-agent", "trade-core", "zillow-agent"]
+GIT = "/usr/local/bin/git"   # absolute: /usr/bin/git is the CLT stub and pops an install dialog
+
+
+def check_git_storage():
+    """Daily (from 07:00): GitHub-reported size per repo (warn at 500 MB; GitHub recommends < 1 GB and
+    strongly < 5 GB), largest tracked file (warn at 25 MB; GitHub rejects > 100 MB), and a local
+    `git gc` when a repo's .git passes 300 MB of loose objects (market-lab hit 449 MB on 2026-09-28)."""
+    if not after("07:00") or state.get("git_storage_checked") == TODAY.isoformat():
+        return
+    state["git_storage_checked"] = TODAY.isoformat()
+    try:
+        cred = subprocess.run([GIT, "credential", "fill"], input="protocol=https\nhost=github.com\n\n",
+                              capture_output=True, text=True, timeout=20).stdout
+        token = next((l[9:] for l in cred.splitlines() if l.startswith("password=")), None)
+    except Exception:
+        token = None
+    problems, biggest_repo, biggest_file = [], ("", 0), ("", 0)
+    for r in REPOS:
+        d = os.path.join(HOME, r)
+        if not os.path.isdir(os.path.join(d, ".git")):
+            continue
+        # largest tracked file
+        try:
+            files = subprocess.run([GIT, "ls-files", "-z"], cwd=d, capture_output=True, text=True, timeout=30).stdout.split("\0")
+            sizes = [(f, os.path.getsize(os.path.join(d, f))) for f in files if f and os.path.isfile(os.path.join(d, f))]
+            f, sz = max(sizes, key=lambda x: x[1]) if sizes else ("", 0)
+            if sz > biggest_file[1]:
+                biggest_file = (f"{r}/{f}", sz)
+            if sz > 25 * 2**20:
+                problems.append(f"{r}: tracked file {f} is {sz / 2**20:.0f} MB (GitHub warns at 50, rejects over 100)")
+        except Exception as ex:
+            problems.append(f"{r}: file-size check failed ({ex!r})")
+        # GitHub-reported repo size
+        if token:
+            try:
+                url = subprocess.run([GIT, "remote", "get-url", "origin"], cwd=d, capture_output=True, text=True, timeout=10).stdout.strip()
+                name = url.split("github.com/")[-1].split("github.com:")[-1].removesuffix(".git")
+                import urllib.request
+                req = urllib.request.Request(f"https://api.github.com/repos/{name}", headers={"Authorization": f"token {token}"})
+                mb = json.load(urllib.request.urlopen(req, timeout=20))["size"] / 1024
+                if mb > biggest_repo[1]:
+                    biggest_repo = (r, mb)
+                if mb > 500:
+                    problems.append(f"{r}: {mb:.0f} MB on GitHub (recommended < 1 GB, strongly < 5 GB)")
+            except Exception:
+                pass
+        # local loose objects
+        try:
+            out = subprocess.run([GIT, "count-objects", "-v"], cwd=d, capture_output=True, text=True, timeout=30).stdout
+            loose_kb = int(next(l.split()[1] for l in out.splitlines() if l.startswith("size:")))
+            if loose_kb > 300 * 1024:
+                subprocess.run([GIT, "gc", "-q"], cwd=d, capture_output=True, timeout=600)
+                note("git storage", "ok", f"{r}: packed {loose_kb // 1024} MB of loose objects locally")
+        except Exception:
+            pass
+    if problems:
+        note("git storage", "warn", "; ".join(problems)[:300])
+        alert("git-storage", "Git repo size warning", "\n".join(problems) +
+              "\n\nOptions: archive old data into release assets, split data into its own repo, or move bulk data out of git.", every_hours=24 * 7)
+    else:
+        note("git storage", "ok", f"largest repo {biggest_repo[0]} {biggest_repo[1]:.0f} MB on GitHub; largest file {biggest_file[0]} {biggest_file[1] / 2**20:.1f} MB")
+
+
 def daily_confirmation(trading):
     """Once a day, a short email confirming what was delivered: 12/12 on trading days
     (watchlist + bio/pharma + 10 sectors), the watchlist alone otherwise. Sent on the
@@ -462,7 +527,7 @@ def main():
         check_flip(trading)
     except Exception as ex:
         note("flip notifier", "fail", f"watchdog error {ex!r}")
-    for fn in (check_agents, check_platform):
+    for fn in (check_agents, check_platform, check_git_storage):
         try:
             fn()
         except Exception as ex:
