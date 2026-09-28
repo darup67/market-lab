@@ -296,8 +296,9 @@ def check_flip(trading):
         # healthcheck.js --repair would reload TradingView and re-flag the missing Scanner.
         log = os.path.join(FLIP, "headless-flip.log")
         try:
-            last = open(log).read().rstrip().split("\n")[-1]
-            age = time.time() - os.path.getmtime(log)
+            runs = [l for l in open(log).read().rstrip().split("\n") if " MATRIX " not in l]
+            last = runs[-1]   # ignore matrix-report lines; judge the flip runs
+            age = time.time() - dt.datetime.fromisoformat(last.split()[0].replace("Z", "+00:00")).timestamp()
         except OSError:
             last, age = "no log", 1e9
         if age > 40 * 60 or "FATAL" in last or "mode live" not in last:
