@@ -307,6 +307,17 @@ def check_flip(trading):
         note("headless flip", "warn", last.split(" · ERR ")[-1][:160])
     else:
         note("headless flip", "ok", last.split("  ", 1)[-1][:120])
+    # Crypto scanner (crypto-scan.js, every 15 min): its log must be fresh.
+    try:
+        cl = open(os.path.join(FLIP, "crypto-scan.log")).read().rstrip().split("\n")[-1]
+        cage = time.time() - dt.datetime.fromisoformat(cl.split()[0].replace("Z", "+00:00")).timestamp()
+        if cage > 40 * 60 or "FATAL" in cl:
+            note("crypto scan", "fail", f"last run {int(cage // 60)}m ago: {cl[-140:]}")
+            alert("crypto-scan", "Crypto scanner not running cleanly", f"Last log line ({int(cage // 60)} min old):\n{cl}", every_hours=2)
+        else:
+            note("crypto scan", "ok", cl.split("  ", 1)[-1][:120])
+    except OSError:
+        note("crypto scan", "warn", "no crypto-scan.log yet")
     # Briefs at 08:55 and 16:30 daily: re-send if the latest slot was missed.
     slots = [s for s in ("08:55", "16:30") if after(s)]
     if slots and NOW.hour * 60 + NOW.minute - int(slots[-1][:2]) * 60 - int(slots[-1][3:]) >= 15:
