@@ -491,8 +491,19 @@ def check_git_storage():
 
 def check_prelaunch():
     """Pre-graduation collector (coin-launch prelaunch.py tick, every 5 min): the board file must be fresh."""
-    if not json.load(open(os.path.join(HOME, "coin-launch-agent", "config.json"))).get("pump_watch", True):
-        return note("prelaunch", "ok", "pump.fun collection paused (config pump_watch=false); listed board is the detector")
+    cfg = json.load(open(os.path.join(HOME, "coin-launch-agent", "config.json")))
+    if os.path.exists(os.path.join(HOME, "Library", "LaunchAgents", "com.dhruv.coinlaunch.pre.plist.disabled")):
+        # ML add-ons (pre-graduation collector, plus50) unloaded 2026-09-29; the ORIGINAL watcher stays on with its original parameters
+        try:
+            age = time.time() - os.path.getmtime(os.path.join(HOME, "coin-launch-agent", "data", "live.json"))
+        except OSError:
+            return note("coin watcher", "warn", "no live.json yet")
+        if age > 20 * 60:
+            note("coin watcher", "fail", f"live.json {int(age // 60)}m old")
+            alert("coin-watcher", "Coin watcher not updating", f"~/coin-launch-agent/data/live.json is {int(age // 60)} minutes old (com.dhruv.coinlaunch, KeepAlive).", every_hours=3)
+        else:
+            note("coin watcher", "ok", "original watcher live; ML add-ons paused")
+        return
     f = os.path.join(HOME, "coin-launch-agent", "data", "pre", "board.json")
     try:
         age = time.time() - os.path.getmtime(f)
