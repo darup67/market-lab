@@ -491,6 +491,8 @@ def check_git_storage():
 
 def check_prelaunch():
     """Pre-graduation collector (coin-launch prelaunch.py tick, every 5 min): the board file must be fresh."""
+    if not json.load(open(os.path.join(HOME, "coin-launch-agent", "config.json"))).get("pump_watch", True):
+        return note("prelaunch", "ok", "pump.fun collection paused (config pump_watch=false); listed board is the detector")
     f = os.path.join(HOME, "coin-launch-agent", "data", "pre", "board.json")
     try:
         age = time.time() - os.path.getmtime(f)
@@ -502,6 +504,22 @@ def check_prelaunch():
     else:
         b = json.load(open(f))
         note("prelaunch", "ok", f"{len(b.get('rows', []))} on board, {b.get('labeled', 0)} labeled coins")
+
+
+def check_listed():
+    """Coinbase/Robinhood-listed coin board (coin-launch-agent listed.py, every 15 min): must be fresh."""
+    f = os.path.join(HOME, "coin-launch-agent", "data", "listed_board.json")
+    try:
+        b = json.load(open(f))
+    except (OSError, ValueError):
+        return note("listed board", "warn", "no board yet")
+    age = time.time() - b["updated"]
+    if age > 50 * 60:
+        note("listed board", "fail", f"board {int(age // 60)}m old")
+        alert("listed", "Listed-coin board not updating", f"~/coin-launch-agent/data/listed_board.json is {int(age // 60)} minutes old (runs every 15 min).", every_hours=3)
+    else:
+        c = b["counts"]
+        note("listed board", "ok", f"{b['universe']} scored, {c['clean']} clean (fast+steady+holding)")
 
 
 def check_sweep():
@@ -577,7 +595,7 @@ def main():
         check_flip(trading)
     except Exception as ex:
         note("flip notifier", "fail", f"watchdog error {ex!r}")
-    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_sweep):
+    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_sweep):
         try:
             fn()
         except Exception as ex:

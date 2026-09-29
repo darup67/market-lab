@@ -57,6 +57,20 @@ def old_screenshots():
     return n, freed
 
 
+def old_backups():
+    """Pruned-data backups (coin-launch-agent/data/_pruned_*.tgz) are kept 7 days, then deleted."""
+    freed = n = 0
+    for p in glob.glob(os.path.join(HOME, "coin-launch-agent", "data", "_pruned_*.tgz")):
+        try:
+            if time.time() - os.path.getmtime(p) > 7 * 86400:
+                freed += os.path.getsize(p); n += 1
+                if not DRY:
+                    os.remove(p)
+        except OSError:
+            pass
+    return n, freed
+
+
 def candles():
     if DRY:
         return "skipped (dry)"
@@ -71,6 +85,7 @@ def main():
     out = {}
     n, b = rotate_logs(); out["logs"] = f"{n} rotated, {b / 1e6:.1f} MB freed"
     n, b = old_screenshots(); out["screenshots"] = f"{n} deleted, {b / 1e6:.1f} MB freed"
+    n, b = old_backups(); out["pruned backups"] = f"{n} deleted, {b / 1e6:.1f} MB freed"
     out["candles"] = candles()
     for k, v in out.items():
         print(f"{k:12} {v}")
