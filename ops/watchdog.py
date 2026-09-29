@@ -504,6 +504,22 @@ def check_prelaunch():
         note("prelaunch", "ok", f"{len(b.get('rows', []))} on board, {b.get('labeled', 0)} labeled coins")
 
 
+def check_sweep():
+    """Daily disk sweep (sweep.py): logs, old screenshots, candle archive + git push. Runs once a day after 03:00."""
+    f = os.path.join(HERE, "data", "sweep.json")
+    last = jload(f, {}).get("at", "")
+    if last[:10] != str(TODAY) and NOW.hour >= 3 and state.get("sweep_started") != str(TODAY):
+        state["sweep_started"] = str(TODAY)
+        spawn([sys.executable, os.path.join(HERE, "sweep.py")], "sweep.log")
+        return note("sweep", "ok", "started today's disk sweep")
+    if last and (NOW - dt.datetime.fromisoformat(last)).days >= 2:
+        note("sweep", "warn", f"last disk sweep {last[:10]}")
+    else:
+        c = jload(f, {}).get("candles", "")
+        bad = "push_error" in c
+        note("sweep", "warn" if bad else "ok", ("candle push failed: " + c[-120:]) if bad else f"last {last[:16] or 'never'}: {jload(f, {}).get('logs', '')}")
+
+
 def daily_confirmation(trading):
     """Once a day, a short email confirming what was delivered: 12/12 on trading days
     (watchlist + bio/pharma + 10 sectors), the watchlist alone otherwise. Sent on the
@@ -561,7 +577,7 @@ def main():
         check_flip(trading)
     except Exception as ex:
         note("flip notifier", "fail", f"watchdog error {ex!r}")
-    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch):
+    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_sweep):
         try:
             fn()
         except Exception as ex:
