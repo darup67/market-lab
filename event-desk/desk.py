@@ -467,7 +467,7 @@ def act_table(items):
             g = (ev.get("groups", {}).get(f"market-iv|spread:{it['name']}") or {}).get("*")
             rec = (f'{g["n"]} graded · {g["win"]:.0%} profitable vs {g["baseline"]:.0%} market odds' + (" · PROVEN" if g.get("proven") else "")
                    ) if g else "no graded spreads yet"
-            tcell = (f'🎫 <b>{e(tk["id"])}</b><br><span style="font-size:11px;color:#666">say &#8220;place ticket {e(tk["id"])}&#8221;</span>'
+            tcell = (f'🎫 <b>{e(tk["id"])}</b><br><span style="font-size:11px;color:#666">enter by hand; say &#8220;check ticket {e(tk["id"])}&#8221; for live quotes</span>'
                      if tk else "—")
             rows.append(
                 f'<tr><td {TD}>{e(t.get("emoji", ""))} <b>{e(t["ticker"])}</b>{" &#9888;" if t.get("event_before_exp") else ""}'
@@ -483,7 +483,7 @@ def act_table(items):
     return (f'<h3 style="margin:14px 0 4px">&#9989; Actionable now: {len(rows)} spread{"s" if len(rows) != 1 else ""} across sectors</h3>'
             f'<table style="width:100%;border-collapse:collapse"><tr><th {TH}>Ticker</th><th {TH}>Order</th><th {TH}>Odds</th>'
             f'<th {TH}>Ticket</th><th {TH}>Sector record</th></tr>{"".join(rows)}</table>'
-            '<div style="font-size:11.5px;color:#666">Tickets are never placed automatically; placing one means a broker preview you confirm. '
+            '<div style="font-size:11.5px;color:#666">Tickets are never placed by Claude; you enter them yourself (option spreads need your Level 3 margin account). '
             '&#9888; = earnings or a catalyst can land before expiry. Each spread is logged to the trade-core ledger and graded at expiry.</div>')
 
 
