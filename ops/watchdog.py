@@ -489,6 +489,21 @@ def check_git_storage():
         note("git storage", "ok", f"largest repo {biggest_repo[0]} {biggest_repo[1]:.0f} MB on GitHub; largest file {biggest_file[0]} {biggest_file[1] / 2**20:.1f} MB")
 
 
+def check_prelaunch():
+    """Pre-graduation collector (coin-launch prelaunch.py tick, every 5 min): the board file must be fresh."""
+    f = os.path.join(HOME, "coin-launch-agent", "data", "pre", "board.json")
+    try:
+        age = time.time() - os.path.getmtime(f)
+    except OSError:
+        return note("prelaunch", "warn", "no board yet")
+    if age > 40 * 60:
+        note("prelaunch", "fail", f"board {int(age // 60)}m old")
+        alert("prelaunch", "Pre-graduation collector not running", f"~/coin-launch-agent/data/pre/board.json is {int(age // 60)} minutes old (runs every 5 min).", every_hours=3)
+    else:
+        b = json.load(open(f))
+        note("prelaunch", "ok", f"{len(b.get('rows', []))} on board, {b.get('labeled', 0)} labeled coins")
+
+
 def daily_confirmation(trading):
     """Once a day, a short email confirming what was delivered: 12/12 on trading days
     (watchlist + bio/pharma + 10 sectors), the watchlist alone otherwise. Sent on the
@@ -546,7 +561,7 @@ def main():
         check_flip(trading)
     except Exception as ex:
         note("flip notifier", "fail", f"watchdog error {ex!r}")
-    for fn in (check_agents, check_platform, check_git_storage):
+    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch):
         try:
             fn()
         except Exception as ex:
