@@ -86,6 +86,10 @@ def main():
     n, b = rotate_logs(); out["logs"] = f"{n} rotated, {b / 1e6:.1f} MB freed"
     n, b = old_screenshots(); out["screenshots"] = f"{n} deleted, {b / 1e6:.1f} MB freed"
     n, b = old_backups(); out["pruned backups"] = f"{n} deleted, {b / 1e6:.1f} MB freed"
+    if not DRY:
+        env = {k: v for k, v in os.environ.items() if k != "__PYVENV_LAUNCHER__"}
+        r = subprocess.run([os.path.join(HOME, ".venvs", "market-ml", "bin", "python"), "sentiment.py", "backup"], cwd=os.path.join(HOME, "coin-launch-agent"), capture_output=True, text=True, timeout=120, env=env)
+        out["sentiment archive"] = (r.stdout.strip() or r.stderr.strip())[-120:]
     out["candles"] = candles()
     for k, v in out.items():
         print(f"{k:12} {v}")

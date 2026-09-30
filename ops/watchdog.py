@@ -144,6 +144,7 @@ SYSTEM = {   # alert key -> (exact title, what the watchdog already did about it
     "coin-watcher": "The original coin watcher is not writing fresh data.",
     "prelaunch": "The pre-graduation collector is not writing fresh data.",
     "listed": "The Coinbase/Robinhood listed-coin board is not updating.",
+    "sentiment": "The social sentiment refresh is not writing readings, so emails will show stale or missing sentiment.",
     "calendar": "The NYSE holiday list has no dates for this year, so trading-day checks are unreliable.",
 }
 
@@ -563,6 +564,22 @@ def check_listed():
         note("listed board", "ok", f"{b['universe']} scored, {c['clean']} clean (fast+steady+holding)")
 
 
+def check_sentiment():
+    """Social sentiment refresh (coin-launch-agent sentiment.py, every 15 min): latest.json must be fresh."""
+    f = os.path.join(HOME, "coin-launch-agent", "data", "sentiment", "latest.json")
+    try:
+        b = json.load(open(f))
+    except (OSError, ValueError):
+        return note("sentiment", "warn", "no readings yet")
+    age = time.time() - b.get("updated", 0)
+    n = sum(1 for t in b.get("tokens", {}).values() if t.get("score") is not None and time.time() - t.get("t", 0) < 3 * 3600)
+    if age > 50 * 60:
+        note("sentiment", "fail", f"readings {int(age // 60)}m old")
+        alert("sentiment", "Social sentiment not refreshing", f"~/coin-launch-agent/data/sentiment/latest.json is {int(age // 60)} minutes old (runs every 15 min).", every_hours=3)
+    else:
+        note("sentiment", "ok", f"{n} tokens with a fresh reading")
+
+
 def check_sweep():
     """Daily disk sweep (sweep.py): logs, old screenshots, candle archive + git push. Runs once a day after 03:00."""
     f = os.path.join(HERE, "data", "sweep.json")
@@ -642,7 +659,7 @@ def main():
         check_flip(trading)
     except Exception as ex:
         note("flip notifier", "fail", f"watchdog error {ex!r}")
-    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_sweep):
+    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_sentiment, check_sweep):
         try:
             fn()
         except Exception as ex:
