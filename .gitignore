@@ -9,3 +9,4 @@ __pycache__/
 # committing them is the only thing that makes the history durable.
 .chronos-notified
 research/cache/
+sector-research/err.log
