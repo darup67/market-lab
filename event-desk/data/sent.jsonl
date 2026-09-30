@@ -68,3 +68,14 @@
 {"t": 1790728024.78179, "email": "watchlist", "subject": "[TEST] Watchlist briefing: 1 earnings ahead, 214 headlines", "ok": true, "test": true}
 {"t": 1790728049.223823, "email": "biopharma", "subject": "[TEST] \ud83e\uddec Bio/pharma \u00b7 ACT HIMS+MRNA \u00b7 events BMY, NEOG, MRK", "ok": true, "test": true}
 {"t": 1790772664.0185652, "email": "watchlist", "subject": "Event Desk \u00b7 Watchlist briefing: 1 earnings ahead, 217 headlines (in morning brief)", "ok": true, "test": false}
+{"t": 1790781214.624949, "email": "biopharma", "subject": "Event Desk \u00b7 Market Digest: ACT HIMS+PURR+GOOG+RKLB+CRWV \u00b7 11 sections", "ok": true, "test": false}
+{"t": 1790781214.6253, "email": "communication", "subject": "Event Desk \u00b7 Market Digest: ACT HIMS+PURR+GOOG+RKLB+CRWV \u00b7 11 sections", "ok": true, "test": false}
+{"t": 1790781214.625757, "email": "consumer-discretionary", "subject": "Event Desk \u00b7 Market Digest: ACT HIMS+PURR+GOOG+RKLB+CRWV \u00b7 11 sections", "ok": true, "test": false}
+{"t": 1790781214.625917, "email": "consumer-staples", "subject": "Event Desk \u00b7 Market Digest: ACT HIMS+PURR+GOOG+RKLB+CRWV \u00b7 11 sections", "ok": true, "test": false}
+{"t": 1790781214.626063, "email": "energy", "subject": "Event Desk \u00b7 Market Digest: ACT HIMS+PURR+GOOG+RKLB+CRWV \u00b7 11 sections", "ok": true, "test": false}
+{"t": 1790781214.626205, "email": "financials", "subject": "Event Desk \u00b7 Market Digest: ACT HIMS+PURR+GOOG+RKLB+CRWV \u00b7 11 sections", "ok": true, "test": false}
+{"t": 1790781214.626345, "email": "industrials", "subject": "Event Desk \u00b7 Market Digest: ACT HIMS+PURR+GOOG+RKLB+CRWV \u00b7 11 sections", "ok": true, "test": false}
+{"t": 1790781214.626486, "email": "materials", "subject": "Event Desk \u00b7 Market Digest: ACT HIMS+PURR+GOOG+RKLB+CRWV \u00b7 11 sections", "ok": true, "test": false}
+{"t": 1790781214.626624, "email": "real-estate", "subject": "Event Desk \u00b7 Market Digest: ACT HIMS+PURR+GOOG+RKLB+CRWV \u00b7 11 sections", "ok": true, "test": false}
+{"t": 1790781214.6267562, "email": "technology", "subject": "Event Desk \u00b7 Market Digest: ACT HIMS+PURR+GOOG+RKLB+CRWV \u00b7 11 sections", "ok": true, "test": false}
+{"t": 1790781214.626888, "email": "utilities", "subject": "Event Desk \u00b7 Market Digest: ACT HIMS+PURR+GOOG+RKLB+CRWV \u00b7 11 sections", "ok": true, "test": false}
