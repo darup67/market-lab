@@ -19,9 +19,10 @@ EVENTDESK_IV_ROOT=<dir>, IV data (snapshots, handoffs) is read from <dir> instea
 orders, no recommendations. Jev labels are unvalidated until data/judged.jsonl
 has been scored against price moves.
 """
-import datetime as dt, html, json, os, smtplib, ssl, subprocess, sys, time
+import datetime as dt, html, json, os, re, smtplib, ssl, subprocess, sys, time
 from email.header import Header
 from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 import judge, sources
 
@@ -129,16 +130,36 @@ def jev_cell(s):
             f'<span style="color:#555">{e((s["main_event"] or "").replace("_", " "))}</span>')
 
 
-TD = 'style="padding:7px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top"'
-TH = 'style="padding:6px 8px;border-bottom:2px solid #111;text-align:left;font-size:12px"'
+TD = 'style="padding:8px 8px;border-bottom:1px solid #f0f1f3;vertical-align:top;font-size:13px"'
+TH = 'style="padding:7px 8px;border-bottom:2px solid #e5e7eb;text-align:left;font:600 10px -apple-system,Helvetica,Arial,sans-serif;letter-spacing:.7px;text-transform:uppercase;color:#6b7280"'
+FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
+H3 = f'style="margin:22px 0 8px;font:700 14px/1.3 {FONT};color:#111827"'
+
+sys.path.insert(0, os.path.expanduser("~/flip-notifier"))
+import email_ui  # noqa: E402  (shared email layout, one template for every product)
 
 
 def page(title, subtitle, body):
-    return (f'<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:900px;'
-            f'margin:0 auto;padding:14px;font-size:13.5px;color:#111"><h2 style="margin:0">{e(title)}</h2>'
-            f'<div style="color:#666;font-size:12.5px">{e(subtitle)}</div>{body}'
-            f'<p style="color:#999;font-size:11px;margin-top:22px">event-desk (~/market-lab/event-desk). '
-            f'Information only: no orders, no recommendations.</p></div>')
+    """One report section: a shared-style section header plus its body. Sections are embedded in the digest and in the
+    morning brief, and wrapped into a full email by wrap_email()."""
+    body = re.sub(r'<h3 style="[^"]*">', f"<h3 {H3}>", body)
+    body = body.replace("border-top:3px solid #111", "border-top:1px solid #e5e7eb")
+    return (f'<div style="font-family:{FONT};font-size:13px;color:#111827"><div style="margin:24px 0 12px">'
+            f'<div style="font:700 12px {FONT};letter-spacing:1px;text-transform:uppercase;color:#111827;border-bottom:1px solid #e5e7eb;padding-bottom:6px">{e(title)}</div>'
+            f'<div style="font:12px/1.5 {FONT};color:#6b7280;margin-top:6px">{e(subtitle)}</div></div>{body}</div>')
+
+
+def strip_tags(h):
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", h)).strip()
+
+
+def wrap_email(kind, title, subtitle, body_html, status=None):
+    """Full email (HTML + plain-text alternative) from section HTML."""
+    spec = {"kind": kind, "title": title, "subtitle": subtitle, "status": status,
+            "sections": [{"blocks": [{"type": "raw", "html": body_html, "text": strip_tags(body_html)}]}],
+            "footer": "Sent by the Event Desk (~/market-lab/event-desk). Information only: no orders, no recommendations."}
+    html_, text = email_ui.render(spec)
+    return html_, text
 
 
 # ---------------------------------------------------------------- watchlist
@@ -178,7 +199,7 @@ def watchlist_report(c):
              f'{w["news_lookback_hours"]}h</h3><table style="width:100%;border-collapse:collapse">'
              f'<tr><th {TH}>Ticker</th><th {TH}>Jev</th><th {TH}>Headlines</th></tr>{rows}</table>')
     mat = sum(news[t["id"]]["material"] for t in wl)
-    subject = (f"Watchlist briefing: {len(ahead)} earnings ahead" +
+    subject = (f"Event Desk · Watchlist briefing: {len(ahead)} earnings ahead" +
                (f", {mat} material headlines" if ready else f", {sum(len(news[t['id']]['rows']) for t in wl)} headlines"))
     sub = (f"{dt.datetime.now():%A %b %d, %I:%M %p} · {len(wl)} tickers from the TradingView watchlist "
            f"(list last changed {updated[:10] if updated else '?'}; re-checked against TradingView each weekday 08:33)")
@@ -378,7 +399,7 @@ def sector_report(c, b, deadline=None):
                  f'<h3 style="margin:0 0 6px">Full IV scan · {e(m["run"])}</h3>'
                  f'<div style="font-size:12px;color:#666;margin-bottom:8px">{e(m["subject"])}</div>{iv_report}')
     acts = act_tickers
-    subject = (f"{b['emoji']} {b['title']} · " + (f"ACT {'+'.join(acts)}" if acts else "no spread passes") +
+    subject = (f"Event Desk · {b['title']} options: " + (f"ACT {'+'.join(acts)}" if acts else "no spread passes") +
                " · events " + ", ".join(x["r"]["ticker"] for x in top[:3]))
     sub = (f"{dt.datetime.now():%A %b %d, %I:%M %p} · from market-iv-agent snapshot {snap_date} "
            f"({len(rows)} names, {len(cand)} checked for news)")
@@ -386,11 +407,16 @@ def sector_report(c, b, deadline=None):
 
 
 # ---------------------------------------------------------------- delivery
-def send(c, subject, body_html):
+def send(c, subject, body_html, text=None):
     m = c["email"]
     pw = subprocess.run(["security", "find-generic-password", "-a", m["keychain_account"], "-s",
                          m["keychain_service"], "-w"], capture_output=True, text=True, check=True).stdout.strip()
-    msg = MIMEText(body_html, "html", "utf-8")
+    if text:
+        msg = MIMEMultipart("alternative")
+        msg.attach(MIMEText(text, "plain", "utf-8"))
+        msg.attach(MIMEText(body_html, "html", "utf-8"))
+    else:
+        msg = MIMEText(body_html, "html", "utf-8")
     msg["Subject"] = Header(subject, "utf-8")
     msg["From"] = f"Event Desk <{m['keychain_account']}>"
     msg["To"] = m["to"]
@@ -500,17 +526,19 @@ def send_digest(c, test):
     if not items:
         return log("digest: nothing new to send")
     items.sort(key=lambda it: (it["name"] != "biopharma", it["name"]))
-    toc = "".join(f'<li><a href="#{e(it["name"])}">{e(it["subject"])}</a></li>' for it in items)
+    toc = "".join(f'<li style="margin:0 0 4px"><a href="#{e(it["name"])}" style="color:#1d4ed8;text-decoration:none">{e(it["subject"])}</a></li>' for it in items)
     acts = [t["ticker"] for it in items for t in it.get("acts", [])]
-    body = (f'<div style="font-family:-apple-system,Helvetica,Arial,sans-serif;max-width:900px;margin:0 auto;padding:14px">'
-            f'<h2 style="margin:0">Market digest · {dt.date.today():%a %b %d}</h2>'
-            f'<div style="color:#666;font-size:12.5px">{len(items)} sections in one email (was {len(items)} separate emails).</div>'
-            f'{act_table(items)}<ol style="font-size:13px">{toc}</ol></div>'
-            + "".join(f'<a name="{e(it["name"])}"></a><hr style="border:0;border-top:2px solid #ddd;margin:26px 0">{it["body"]}' for it in items))
-    subject = (("[TEST] " if test else "") + "📈 Market digest · " + (f"ACT {'+'.join(acts)}" if acts else "no spread passes")
+    inner = (f'<div style="font-family:{FONT};font-size:13px;color:#111827">{act_table(items)}'
+             f'<div style="margin:24px 0 8px;font:700 12px {FONT};letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid #e5e7eb;padding-bottom:6px">In this digest</div>'
+             f'<ol style="margin:0;padding-left:20px;font-size:13px">{toc}</ol></div>'
+             + "".join(f'<a name="{e(it["name"])}"></a>{it["body"]}' for it in items))
+    subject = (("[TEST] " if test else "") + "Event Desk · Market Digest: " + (f"ACT {'+'.join(acts)}" if acts else "no spread passes")
                + f" · {len(items)} sections")
+    body, text = wrap_email("Daily digest · Options", "Market Digest: Bull Call Spread Setups and Event Impact for Health Care Plus S&P 500 Sectors",
+                            f"{dt.datetime.now():%A %b %d} · {len(items)} sections in one email · IV scan snapshots and news",
+                            inner, {"text": f"{len(acts)} spread{'s' if len(acts) != 1 else ''} pass" if acts else "no spread passes", "tone": "good" if acts else "neutral"})
     names = [it["name"] for it in items]
-    ok = send(c, subject, body)
+    ok = send(c, subject, body, text)
     for n in names:
         record_sent(n, subject, ok, test)
     log(f"digest {'sent' if ok else 'FAILED'}: {len(items)} sections")
@@ -599,7 +627,13 @@ def main():
         else:
             prefix = next((args[i + 1] for i, x in enumerate(args[:-1]) if x == "--prefix"), None)
             subject = ("[TEST] " if test else "") + (f"{prefix} " if prefix else "") + subject
-            ok = send(c, subject, body)
+            if name == "watchlist":
+                ttl, kind = "Watchlist Briefing: Earnings and News for Your TradingView Watchlist", "Watchlist briefing"
+            else:
+                who = (re.search(r"Event Desk · (.+?) options:", subject) or [None, name])[1]
+                ttl, kind = f"{who} Options Digest: Bull Call Spread Setups and Event Impact", "Options digest"
+            body, text = wrap_email(kind, ttl, f"{dt.datetime.now():%A %b %d, %I:%M %p} ET", body)
+            ok = send(c, subject, body, text)
             record_sent(name, subject, ok, test)
             log(f"email {'sent' if ok else 'FAILED'}: {subject}")
             if not ok:

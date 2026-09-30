@@ -178,6 +178,53 @@ def report(c):
     return "\n".join(parts)
 
 
+def paper_spec(text, c):
+    """Email layout for the weekly report: a results table per section (PAPER live, BACKTEST), then calibration and notes."""
+    import re
+    row = re.compile(r"^(\S+)?\s+(flat|hold|trend|breakout|reversion)\s+(-?[\d,.]+)\s+(-?[\d.]+)\s+(-?[\d,.]+)\s+(-?[\d,.]+)\s+([\d.]+)\s+(\d+)\s+([\d,.]+)\s+(\d+)\s+(\S+)\s*(.*)$")
+    secs, cur, asset = [], None, ""
+    calib, notes = [], []
+    lines = text.split("\n")
+    for ln in lines:
+        s = ln.strip()
+        if not s or s.startswith(("PAPER LAB,", "Simulated fills only")) or "strategy" in s and "net $" in s:
+            continue
+        m = row.match(ln)
+        if m and cur is not None:
+            asset = m.group(1) or asset
+            if m.group(2) == "flat":      # the do-nothing baseline is all zeros; "hold" is the baseline that matters
+                continue
+            n = float(m.group(3).replace(",", ""))
+            note = m.group(12)
+            good = "PASSES" in note
+            cur["rows"].append({"a": {"v": asset, "bold": True}, "s": m.group(2), "net": {"v": ("+" if n > 0 else "") + m.group(3), "tone": "good" if n > 0 else "bad" if n < 0 else "neutral", "bold": good},
+                                "ret": m.group(4) + "%", "h": f"{m.group(5)} / {m.group(6)}", "dd": m.group(7) + "%", "t": m.group(8),
+                                "n": {"v": note.replace("no edge, ", "").replace("no edge", "no edge"), "tone": "good" if good else "warn" if "KILLED" in note else "neutral", "bold": good}})
+            continue
+        if re.match(r"^(PAPER|BACKTEST)\b", s):
+            cur = {"title": ("Live paper results" if s.startswith("PAPER") else "Backtest on stored history") , "note": re.sub(r"^\w+\s*", "", s).strip("() "), "rows": []}
+            secs.append(cur); continue
+        if s.startswith("CALIBRATION"):
+            cur = None; calib.append(s); continue
+        if re.match(r"^\w{3} \d+ .* days$", s) or "bars," in s:
+            continue
+        (calib if calib and ln.startswith("  ") and not notes else notes).append(s)
+    out = []
+    for sec in secs:
+        out.append({"title": sec["title"], "note": sec["note"], "blocks": [{"type": "table", "empty": "No rows yet.", "columns": [
+            {"key": "a", "label": "Asset"}, {"key": "s", "label": "Rule"}, {"key": "net", "label": "Net $", "align": "right"}, {"key": "ret", "label": "Return", "align": "right"},
+            {"key": "h", "label": "1st / 2nd half $", "align": "right"}, {"key": "dd", "label": "Max drawdown", "align": "right"}, {"key": "t", "label": "Trades", "align": "right"}, {"key": "n", "label": "Verdict"}], "rows": sec["rows"]}]})
+    if calib:
+        out.append({"title": "Calibration: does a probability forecast beat the base rate?", "note": calib[0].split(":", 1)[-1].strip(),
+                    "blocks": [{"type": "list", "items": calib[1:]}]})
+    if notes:
+        out.append({"title": "Other checks and how to read this", "blocks": [{"type": "list", "items": notes}]})
+    return {"kind": "Weekly report · Paper lab (simulated)", "status": {"text": "SIMULATED ONLY", "tone": "neutral"},
+            "title": f"Paper Lab Weekly Report: Simulated Trading Rules v{c['rules_version']} for BTC, ETH and Micro Futures",
+            "subtitle": f"{datetime.now():%A %b %-d} · fills are simulated after estimated costs · no broker connection · live paper period since {c['paper_start'][:10]}",
+            "sections": out, "footer": "Sent by the Paper Lab (~/market-lab/paper-lab). Nothing here was traded."}
+
+
 def main():
     c = cfg()
     cmd = sys.argv[1] if len(sys.argv) > 1 else "report"
@@ -206,10 +253,10 @@ def main():
         text = report(c)
         print(text)
         if "--email" in sys.argv:
-            r = subprocess.run([os.path.expanduser("~/.local/bin/node"), os.path.expanduser("~/flip-notifier/send-email.js"),
-                                f"Paper lab weekly: rules v{c['rules_version']}", text],
-                               capture_output=True, text=True, timeout=90)
-            log("email " + ("sent" if r.returncode == 0 else f"FAILED {r.stderr[-200:]}"))
+            sys.path.insert(0, os.path.expanduser("~/flip-notifier"))
+            import email_ui
+            ok = email_ui.send(f"Market Lab · Paper Lab weekly report (simulated) · rules v{c['rules_version']}", paper_spec(text, c))
+            log("email " + ("sent" if ok else "FAILED"))
     else:
         print(__doc__)
 

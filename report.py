@@ -384,10 +384,10 @@ def build():
     L.append("Detail: python3 analyze.py   |   python3 query.py \"SELECT ...\"")
 
     head = "NEEDS ATTENTION" if problems else "OK"
-    subject = f"BTC 15m recorder - {head}"
+    subject = f"Market Lab · BTC 15-minute recorder daily report · {head}"
     if btc and not problems:
         reg = regime_series(btc)
-        subject += f" - vol {reg[-1][2]} {reg[-1][1]:.0f}c" if len(reg) else ""
+        subject += f" · volatility {reg[-1][2]} {reg[-1][1]:.0f}c" if len(reg) else ""
     return subject, "\n".join(L)
 
 
@@ -449,17 +449,24 @@ def main():
             pw = ""
     if not pw:
         print("no Gmail app password — cannot send"); sys.exit(1)
-    def send(subj, text, tries=4):
+    def send(subj, text, tries=4, spec=None, title=None, kind=None):
         # A single network blip used to cost the whole day's report. Retry with
         # growing pauses; the job runs once a day, so waiting is cheap.
         env = {**os.environ, "FLIP_GMAIL_APP_PASSWORD": pw, "SEND_EMAIL_TIMEOUT_MS": "90000"}
+        sys.path.insert(0, os.path.expanduser("~/flip-notifier"))
+        import email_ui
+        spec = spec or email_ui.from_text(
+            kind or "Daily report · Kalshi Bitcoin recorder", title or "Kalshi BTC 15-Minute Recorder: Daily Health, Volatility and Results",
+            f"{datetime.now():%A %b %-d, %-I:%M %p} · overnight windows captured, volatility bands and how often the minute-1 price was right",
+            text.split("\n"), None if title else {"text": "NEEDS ATTENTION" if "NEEDS ATTENTION" in text else "ALL OK", "tone": "bad" if "NEEDS ATTENTION" in text else "good"},
+            "Sent by Market Lab (~/market-lab). Figures are in-sample and exclude fees.")
         for n in range(tries):
             try:
-                r = subprocess.run([os.path.expanduser("~/.local/bin/node"), SEND, subj, text], capture_output=True,
-                                   text=True, timeout=120, env=env)
+                r = subprocess.run([os.path.expanduser("~/.local/bin/node"), os.path.join(os.path.expanduser("~/flip-notifier"), "email-ui.js"), "send", subj],
+                                   input=json.dumps(spec), capture_output=True, text=True, timeout=120, env=env)
                 err = None if r.returncode == 0 else (r.stderr or r.stdout).strip()[:300]
             except subprocess.TimeoutExpired:
-                err = "node send-email.js timed out"
+                err = "email-ui send timed out"
             if err is None:
                 print(f"sent: {subj}"); return True
             print(f"send failed (try {n+1}/{tries}):", err, flush=True)
@@ -475,7 +482,7 @@ def main():
     # routine daily report.
     btc_n = len(load().get("KXBTC15M", []))
     ready = chronos_ready(btc_n)
-    if ready and send(*ready):
+    if ready and send(*ready, title="Kalshi BTC Dataset Is Big Enough: Ready to Run the Chronos Forecasting Test", kind="One-time reminder · Research"):
         open(CHRONOS_FLAG, "w").write(datetime.now(timezone.utc).isoformat() + "\n")
 
 if __name__ == "__main__":

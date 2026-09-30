@@ -130,7 +130,41 @@ def spawn(args, logname):
 
 
 # ---------------------------------------------------------------- alerts
-def alert(key, subject, body, every_hours=6):
+SYSTEM = {   # alert key -> (exact title, what the watchdog already did about it)
+    "outbox": "Emails Gmail refused are waiting in the outbox. The watchdog retries them each pass; this alert means the retries keep failing.",
+    "zillow": "The daily apartment digest has not run. The watchdog re-runs it (up to 2 times a day); this alert means the re-runs failed.",
+    "watchlist": "The watchlist briefing did not go out by 09:05. The watchdog re-runs it (up to 2 times a day).",
+    "bio-email": "The bio/pharma digest did not go out by 10:45. The watchdog sends a catch-up (up to 2 tries).",
+    "sector-emails": "Some sector digests did not go out by 10:50. The watchdog sends only the missing ones (up to 2 tries).",
+    "headless-flip": "The flip watcher's log is stale or reports a fatal error, so trend flips may be missed.",
+    "crypto-scan": "The crypto scanner's log is stale or reports a fatal error, so crypto signals may be missed.",
+    "agents-failing": "Background jobs exited with an error on consecutive watchdog passes.",
+    "platform": "A Python or Node dependency, pin or import check failed. Jobs that depend on it may fail at their next run.",
+    "git-storage": "A GitHub repo is growing toward its size limit. Git is the only backup, so this needs a decision.",
+    "coin-watcher": "The original coin watcher is not writing fresh data.",
+    "prelaunch": "The pre-graduation collector is not writing fresh data.",
+    "listed": "The Coinbase/Robinhood listed-coin board is not updating.",
+    "calendar": "The NYSE holiday list has no dates for this year, so trading-day checks are unreliable.",
+}
+
+
+def alert_spec(key, subject, body, good=False):
+    """Layout for a system email: exact title, what happened, the raw details, what the watchdog already did."""
+    title = subject.replace("✅ ", "")
+    paras = [p for p in str(body).strip().split("\n\n") if p.strip()]
+    first, rest = (paras[0] if paras else ""), "\n\n".join(paras[1:])
+    secs = []
+    if first:
+        (secs.append({"title": "Details", "blocks": [{"type": "code" if "\n" in first or "/" in first else "para", "text": first}]}))
+    if rest:
+        secs.append({"title": "Log excerpt", "blocks": [{"type": "code", "text": rest[-3000:]}]})
+    secs.append({"title": "What the watchdog has done", "blocks": [{"type": "para", "text": SYSTEM.get(key, "The watchdog retries repairable problems itself and emails only when repair has failed.") +
+                 " It will not repeat this email for several hours. Ask Claude to \"check health of all projects\" for a full check."}]})
+    return {"kind": "System alert" if not good else "Daily delivery report", "status": {"text": "ALL OK" if good else "NEEDS ATTENTION", "tone": "good" if good else "bad"},
+            "title": title, "subtitle": f"Agent Watchdog · {dt.datetime.now():%a %b %-d, %-I:%M %p} ET", "sections": secs, "footer": "Sent by the Agent Watchdog (ops/watchdog.py, every 15 minutes)."}
+
+
+def alert(key, subject, body, every_hours=6, spec=None):
     """Email once per `key` per `every_hours`; a Mac notification if Gmail itself fails."""
     last = state["alerted"].get(key, 0)
     if time.time() - last < every_hours * 3600:
@@ -140,16 +174,12 @@ def alert(key, subject, body, every_hours=6):
         return log(f"DRY would alert: {subject}")
     ok = False
     try:
-        pw = subprocess.run(["security", "find-generic-password", "-a", MAIL["account"], "-s", MAIL["service"], "-w"],
-                            capture_output=True, text=True, check=True).stdout.strip()
-        msg = MIMEText(f"<pre style='font-size:13px'>{body}</pre>", "html", "utf-8")
-        msg["Subject"] = Header(subject if subject.startswith("✅") else f"⚠️ Watchdog: {subject}", "utf-8")
-        msg["From"] = f"Agent Watchdog <{MAIL['account']}>"
-        msg["To"] = MAIL["to"]
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context(), timeout=30) as s:
-            s.login(MAIL["account"], pw)
-            s.sendmail(MAIL["account"], [MAIL["to"]], msg.as_string())
-        ok = True
+        sys.path.insert(0, os.path.expanduser("~/flip-notifier"))
+        import email_ui
+        good = subject.startswith("✅")
+        clean = subject.replace("✅ ", "")
+        ok = email_ui.send(f"Watchdog · Daily delivery report: {clean}" if key == "daily-confirmation" else f"Watchdog · System alert: {clean}",
+                           spec or alert_spec(key, subject, body, good))
     except Exception as ex:
         log(f"alert email failed: {ex!r}")
     if not ok:
@@ -564,7 +594,13 @@ def daily_confirmation(trading):
     body = "\n".join(f"{'OK     ' if e in done else 'MISSING'}  {e}" for e in expected)
     state["confirmed"] = TODAY.isoformat()
     state["alerted"].pop("daily-confirmation", None)
-    alert("daily-confirmation", ("✅ " if not missing else "") + subject, body, every_hours=0)
+    spec = {"kind": "Daily delivery report", "status": {"text": "ALL DELIVERED" if not missing else f"{len(missing)} MISSING", "tone": "good" if not missing else "bad"},
+            "title": (f"All {len(expected)} Scheduled Emails Were Delivered Today" if not missing else f"{ok} of {len(expected)} Scheduled Emails Delivered Today, {len(missing)} Missing"),
+            "subtitle": f"Checked at {dt.datetime.now():%-I:%M %p} ET after the 11:45 and 11:50 catch-ups. Trading days expect the watchlist, bio/pharma and 10 sector emails.",
+            "sections": [{"title": "Delivery status", "blocks": [{"type": "table", "columns": [{"key": "e", "label": "Email"}, {"key": "s", "label": "Status"}],
+                         "rows": [{"e": {"v": e.replace("biopharma", "bio/pharma digest").replace("watchlist", "watchlist briefing"), "bold": True}, "s": {"v": "delivered" if e in done else "MISSING", "tone": "good" if e in done else "bad", "bold": e not in done}} for e in expected]}]}],
+            "footer": "Sent by the Agent Watchdog (ops/watchdog.py)."}
+    alert("daily-confirmation", ("✅ " if not missing else "") + subject, body, every_hours=0, spec=spec)
     note("daily confirmation", "ok" if not missing else "fail", subject)
 
 
