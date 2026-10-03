@@ -455,7 +455,7 @@ def check_platform():
         note("platform", "ok", f"pins intact, imports {'match baseline' if imports_due else 'checked daily'}, {free_gb:.0f} GB free")
 
 
-REPOS = ["asset-agents", "coin-launch-agent", "flip-notifier", "flux-lab", "jev-client", "kalshi-btc-agent",
+REPOS = ["asset-agents", "coin-launch-agent", "flip-notifier", "flux-lab", "jev-client", "kalshi-btc-agent", "kalshi-btc-1h-agent", "kalshi-commodity-agent",
          "market-iv-agent", "market-lab", "portfolio-agent", "trade-core", "zillow-agent"]
 GIT = "/usr/local/bin/git"   # absolute: /usr/bin/git is the CLT stub and pops an install dialog
 
@@ -564,6 +564,77 @@ def check_listed():
         note("listed board", "ok", f"{b['universe']} scored, {c['clean']} clean (fast+steady+holding)")
 
 
+def check_kalshi_commodity():
+    """Kalshi gold/WTI 15m caller (~/kalshi-commodity-agent, launchd every minute): the job must be loaded, each
+    asset's evals log fresh while Kalshi has an open window for it, the weekly recalibration current, and a GitHub
+    remote set up. Repair = kickstart the job (loads it first if unloaded)."""
+    base = os.path.join(HOME, "kalshi-commodity-agent")
+    if not os.path.isdir(base):
+        return note("kalshi commodity", "warn", "repo missing")
+    label = "com.dhruv.kalshicommodity"
+    if not job(label)["loaded"]:
+        kick(label)
+        alert("kalshi-commodity-unloaded", "Kalshi gold/WTI agent was not loaded", f"{label} was not loaded in launchd; the watchdog tried to load it.", every_hours=6)
+        return note("kalshi commodity", "fail", "job was unloaded; reloaded")
+    assets = jload(os.path.join(base, "assets.json"), {})
+    stale = []
+    for name, cfg in assets.items():
+        f = os.path.join(base, "data", f"evals-{name}.jsonl")
+        age = time.time() - os.path.getmtime(f) if os.path.exists(f) else 1e9
+        if age <= 15 * 60:
+            continue
+        try:
+            import urllib.request
+            u = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={cfg['series']}&status=open&limit=1"
+            opened = bool(json.load(urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"}), timeout=15)).get("markets"))
+        except Exception:
+            opened = False   # cannot tell; do not alarm
+        if opened:
+            stale.append(f"{name} ({int(age // 60)}m old)" if age < 1e8 else f"{name} (never logged)")
+    msgs = []
+    if stale:
+        kick(label)
+        note("kalshi commodity", "fail", "evals log stale: " + ", ".join(stale))
+        alert("kalshi-commodity-stale", "Kalshi gold/WTI agent not logging",
+              "evals logs are stale while Kalshi has an open window: " + ", ".join(stale) +
+              "\n\nThe watchdog kickstarted the job. See ~/kalshi-commodity-agent/agent.err.log.", every_hours=3)
+        return
+    gate = os.path.join(base, "gate-gold.json")
+    if os.path.exists(gate) and time.time() - os.path.getmtime(gate) > 10 * 86400:
+        msgs.append("weekly recalibration is over 10 days old")
+    r = subprocess.run([GIT, "remote", "get-url", "origin"], cwd=base, capture_output=True, text=True)
+    if r.returncode != 0:
+        msgs.append("no GitHub remote yet (hourly auto-push cannot run)")
+    note("kalshi commodity", "warn" if msgs else "ok", "; ".join(msgs) if msgs else "gold + WTI logging, recal current")
+
+
+def check_kalshi_btc_1h():
+    """Kalshi 1-hour BTC caller (~/kalshi-btc-1h-agent, launchd every minute): job loaded, evals log under 15 min old
+    (a KXBTCD hourly event is always open), weekly recalibration current, GitHub remote set. Repair = kickstart."""
+    base = os.path.join(HOME, "kalshi-btc-1h-agent")
+    if not os.path.isdir(base):
+        return note("kalshi btc 1h", "warn", "repo missing")
+    label = "com.dhruv.kalshibtc1h"
+    if not job(label)["loaded"]:
+        kick(label)
+        alert("kalshi-btc1h-unloaded", "Kalshi 1-hour BTC agent was not loaded", f"{label} was not loaded in launchd; the watchdog tried to load it.", every_hours=6)
+        return note("kalshi btc 1h", "fail", "job was unloaded; reloaded")
+    f = os.path.join(base, "data", "evals.jsonl")
+    age = time.time() - os.path.getmtime(f) if os.path.exists(f) else 1e9
+    if age > 15 * 60:
+        kick(label)
+        note("kalshi btc 1h", "fail", f"evals log {int(age // 60)}m old" if age < 1e8 else "never logged")
+        return alert("kalshi-btc1h-stale", "Kalshi 1-hour BTC agent not logging",
+                     f"data/evals.jsonl is {int(age // 60)} minutes old. The watchdog kickstarted the job. See ~/kalshi-btc-1h-agent/agent.err.log.", every_hours=3)
+    msgs = []
+    gate = os.path.join(base, "gate.json")
+    if os.path.exists(gate) and time.time() - os.path.getmtime(gate) > 10 * 86400:
+        msgs.append("weekly recalibration is over 10 days old")
+    if subprocess.run([GIT, "remote", "get-url", "origin"], cwd=base, capture_output=True, text=True).returncode != 0:
+        msgs.append("no GitHub remote yet")
+    note("kalshi btc 1h", "warn" if msgs else "ok", "; ".join(msgs) if msgs else "logging, recal current")
+
+
 def check_sentiment():
     """Social sentiment refresh (coin-launch-agent sentiment.py, every 15 min): latest.json must be fresh."""
     f = os.path.join(HOME, "coin-launch-agent", "data", "sentiment", "latest.json")
@@ -659,7 +730,7 @@ def main():
         check_flip(trading)
     except Exception as ex:
         note("flip notifier", "fail", f"watchdog error {ex!r}")
-    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_sentiment, check_sweep):
+    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_kalshi_commodity, check_kalshi_btc_1h, check_sentiment, check_sweep):
         try:
             fn()
         except Exception as ex:
