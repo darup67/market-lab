@@ -1,5 +1,18 @@
 # Research notes
 
+## Volatility vs. prediction accuracy at minutes 1, 3, 4, 5: BTC, gold, WTI (2026-10-03)
+`vol_accuracy.py` (report `results/vol-accuracy-2026-10-03.md` + chart `.png`/`.json`) asks whether higher or lower volatility
+makes the up/down call more often correct on Kalshi's 15-minute markets (BTC 2.6k windows; gold and WTI ~460 windows each, one week).
+Volatility = std of 1-, 3-, 4- and 5-minute candle returns over the trailing 60 minutes (bps per sqrt-minute) plus volatility inside the
+window so far; predictions = the Kalshi favourite at the mark, the naive spot-vs-strike call and the cushion model. CIs resample whole days.
+
+**Result: no usable volatility edge.** Trailing volatility at any candle scale barely moves accuracy: BTC and gold slopes are indistinguishable
+from zero; WTI leans slightly positive (higher vol, a bit more accurate; +0.1 log-odds per SD, significant at minute 1 and pooled, but
+1 of 12 cells and a one-week sample). All three assets pooled: +0.034 [-0.03, +0.10]. Volatility inside the window looks strongly positive
+but disappears once the cushion is controlled for (it just means price already moved). The market also prices it in: buying the favourite
+at the ask earns about -1.5c calm, -0.6c middle, -1.7c volatile, and BTC's EV falls slightly as volatility rises (rho about -0.05 to -0.07).
+Companion: `ml_test_minute.py` (Chronos/AutoGluon vs the market at minutes 1, 3, 4, 5): the market price won at every minute.
+
 ## Kalshi 15-minute crypto: mispricing vs. spot + volatility (2026-09-28)
 `kalshi_mispricing.py` covers 8,817 recorded windows across BTC, ETH, SOL and XRP (24 days). Fair value is Φ(ln(spot/strike) / (σ₁ₘ·√minutes_left)), with σ from the prior 60 one-minute Binance returns.
 
