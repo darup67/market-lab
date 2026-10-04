@@ -10,3 +10,6 @@ __pycache__/
 .chronos-notified
 research/cache/
 sector-research/err.log
+
+# trained AutoGluon predictors (1.5 GB): rebuilt by ml_test_minute.py / study.py, see research/live_reading.py
+research/models/

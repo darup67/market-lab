@@ -1,5 +1,11 @@
 # Research notes
 
+## Live Chronos / AutoGluon reading (2026-10-04)
+`live_reading.py` prints the market price, the cushion model, Chronos-2, Chronos-Bolt and AutoGluon for the CURRENT Kalshi BTC 15-minute
+and 1-hour windows (P(finish above the strike) from each). It is a reading, not a recommendation: in every test the market price matched or
+beat every model at every minute, and no model had positive expected value after fees. The trained AutoGluon predictors (1.5 GB) stay local in
+`research/models/` (git-ignored); the script header says how to rebuild them. Without them only the AutoGluon rows are blank.
+
 ## Volatility vs. prediction accuracy at minutes 1, 3, 4, 5: BTC, gold, WTI (2026-10-03)
 `vol_accuracy.py` (report `results/vol-accuracy-2026-10-03.md` + chart `.png`/`.json`) asks whether higher or lower volatility
 makes the up/down call more often correct on Kalshi's 15-minute markets (BTC 2.6k windows; gold and WTI ~460 windows each, one week).
