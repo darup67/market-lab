@@ -608,6 +608,25 @@ def check_kalshi_commodity():
     note("kalshi commodity", "warn" if msgs else "ok", "; ".join(msgs) if msgs else "gold + WTI logging, recal current")
 
 
+def check_perplab():
+    """Daily perp setups email (~/market-lab/perp-lab/run-daily.sh, 08:30): must be sent every day by 09:30. Repair = re-run the job once."""
+    base = os.path.join(HOME, "market-lab", "perp-lab"); marker = os.path.join(base, "results", "last-email.txt")
+    if not os.path.isdir(base):
+        return note("perp setups email", "warn", "perp-lab missing")
+    now = dt.datetime.now()
+    if now.hour * 60 + now.minute < 9 * 60 + 30:
+        return note("perp setups email", "ok", "not due yet")
+    last = open(marker).read().strip() if os.path.exists(marker) else ""
+    if last == now.strftime("%Y-%m-%d"):
+        return note("perp setups email", "ok", "sent today")
+    subprocess.run([os.path.join(base, "run-daily.sh")], capture_output=True, timeout=600)
+    last = open(marker).read().strip() if os.path.exists(marker) else ""
+    if last == now.strftime("%Y-%m-%d"):
+        return note("perp setups email", "ok", "was missing; re-ran and sent")
+    note("perp setups email", "fail", "not sent today after one retry")
+    alert("perplab-email", "Daily perp setups email not sent", "The 08:30 perp-lab job did not send today's email and one retry failed. See ~/market-lab/perp-lab/results/email.log.", every_hours=6)
+
+
 def check_kalshi_btc_1h():
     """Kalshi 1-hour BTC caller (~/kalshi-btc-1h-agent, launchd every minute): job loaded, evals log under 15 min old
     (a KXBTCD hourly event is always open), weekly recalibration current, GitHub remote set. Repair = kickstart."""
@@ -730,7 +749,7 @@ def main():
         check_flip(trading)
     except Exception as ex:
         note("flip notifier", "fail", f"watchdog error {ex!r}")
-    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_kalshi_commodity, check_kalshi_btc_1h, check_sentiment, check_sweep):
+    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
         try:
             fn()
         except Exception as ex:
