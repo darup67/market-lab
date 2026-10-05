@@ -40,6 +40,11 @@ def daily(cs):
         g = days[k]; out.append({"day": k, "n": len(g), "o": g[0]["o"], "h": max(x["h"] for x in g), "l": min(x["l"] for x in g), "c": g[-1]["c"]})
     return out[:-1] if out and out[-1]["n"] < 24 else out          # drop the still-forming UTC day
 
+def px(x):
+    """Plain price formatting, never scientific: 87,400 / 2,807 / 124.90 / 0.2652."""
+    a = abs(x)
+    return f"{x:,.0f}" if a >= 1000 else f"{x:,.1f}" if a >= 100 else f"{x:,.2f}" if a >= 1 else f"{x:.4f}"
+
 def setup(d, rule, last_px):
     c = np.array([x["c"] for x in d]); h = np.array([x["h"] for x in d]); l = np.array([x["l"] for x in d])
     e = ema(c, rule["trend"]); a = setups.atr(h, l, c); i = len(d) - 1; n = rule["n"]
@@ -74,12 +79,12 @@ def main():
     if "--json" in sys.argv: print(json.dumps(res, indent=1, default=float)); return
     print(f"PERP SETUPS (paper/information only) · {time.strftime('%a %b %d %H:%M', time.localtime())} · risk {RISK*100:.0f}% of equity per trade, leverage cap {LEVCAP:g}x\n")
     for c, r in res.items():
-        print(f"{c}  ${r['price']:,.4g}   15m SuperTrend {r['context'].get('supertrend_15m','?')}   recent detector: {', '.join(r['context'].get('recent', [])) or 'none'}")
+        print(f"{c}  ${px(r['price'])}   15m SuperTrend {r['context'].get('supertrend_15m','?')}   recent detector: {', '.join(r['context'].get('recent', [])) or 'none'}")
         for s in r["setups"]:
             if s["signal"] != "none":
-                print(f"   {s['rule']}: {s['signal']}  entry ~{s['entry']:,.4g}  stop {s['stop']:,.4g} ({s['stop_pct']:.1f}%)  target {s['target']:,.4g}  size {s['size_x_equity']}x equity  hold<={s['max_hold_days']}d  (signal {s['signal_day']})")
+                print(f"   {s['rule']}: {s['signal']}  entry ~{px(s['entry'])}  stop {px(s['stop'])} ({s['stop_pct']:.1f}%)  target {px(s['target'])}  size {s['size_x_equity']}x equity  hold<={s['max_hold_days']}d  (signal {s['signal_day']})")
             else:
-                print(f"   {s['rule']}: no setup. LONG if a daily close > {s['long_trigger']:,.4g} (stop then ~{s['long_stop_if_triggered']:,.4g}); SHORT if a daily close < {s['short_trigger']:,.4g} (stop then ~{s['short_stop_if_triggered']:,.4g}). Trend filter {'up' if s['trend_ok_long'] else 'down'}.")
+                print(f"   {s['rule']}: no setup. LONG if a daily close > {px(s['long_trigger'])} (stop then ~{px(s['long_stop_if_triggered'])}); SHORT if a daily close < {px(s['short_trigger'])} (stop then ~{px(s['short_stop_if_triggered'])}). Trend filter {'up' if s['trend_ok_long'] else 'down'}.")
         if r.get("warning"): print("   !", r["warning"])
     print("\nProven? TREND-55 and TREND-20 were positive out-of-sample in 4 of 4 coins in a ~3-year test (24 and 52 OOS trades): promising, small sample. The 15m detector long/short mirrors were NOT better than random after costs.")
 

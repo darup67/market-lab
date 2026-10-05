@@ -102,28 +102,28 @@
   }
  },
  "HYPE": {
-  "price": 94.759,
+  "price": 94.781,
   "days_of_history": 208,
   "setups": [
    {
     "rule": "TREND-55",
     "signal": "none",
-    "atr_d": 4.492013232579812,
+    "atr_d": 4.492013158794446,
     "trend_ok_long": true,
     "long_trigger": 97.999,
     "short_trigger": 53.737,
-    "long_stop_if_triggered": 84.52296030226056,
-    "short_stop_if_triggered": 67.21303969773945
+    "long_stop_if_triggered": 84.52296052361666,
+    "short_stop_if_triggered": 67.21303947638334
    },
    {
     "rule": "TREND-20",
     "signal": "none",
-    "atr_d": 4.492013232579812,
+    "atr_d": 4.492013158794446,
     "trend_ok_long": true,
     "long_trigger": 97.999,
     "short_trigger": 75.15,
-    "long_stop_if_triggered": 86.76896691855046,
-    "short_stop_if_triggered": 86.38003308144954
+    "long_stop_if_triggered": 86.76896710301388,
+    "short_stop_if_triggered": 86.38003289698612
    }
   ],
   "context": {

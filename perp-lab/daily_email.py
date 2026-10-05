@@ -5,7 +5,10 @@ Sent every day: either the live LONG/SHORT calls with entry/stop/target, or 'no 
 import json, os, subprocess, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__)); NODE = "/usr/local/bin/node"
 UI = os.path.expanduser("~/flip-notifier/email-ui.js")
-g = lambda x: f"{x:,.4g}"
+def g(x):
+    """Plain price formatting, never scientific: 87,400 / 2,807 / 124.90 / 0.2652."""
+    a = abs(x)
+    return f"{x:,.0f}" if a >= 1000 else f"{x:,.1f}" if a >= 100 else f"{x:,.2f}" if a >= 1 else f"{x:.4f}"
 
 def build():
     res = json.load(open(os.path.join(HERE, "results", "setups.json")))
