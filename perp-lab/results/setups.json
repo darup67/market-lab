@@ -1,0 +1,173 @@
+{
+ "BTC": {
+  "price": 85889.85,
+  "days_of_history": 1095,
+  "setups": [
+   {
+    "rule": "TREND-55",
+    "signal": "none",
+    "atr_d": 2229.2249888271695,
+    "trend_ok_long": true,
+    "long_trigger": 87397.0,
+    "short_trigger": 62468.21,
+    "long_stop_if_triggered": 80709.32503351849,
+    "short_stop_if_triggered": 69155.8849664815
+   },
+   {
+    "rule": "TREND-20",
+    "signal": "none",
+    "atr_d": 2229.2249888271695,
+    "trend_ok_long": true,
+    "long_trigger": 87397.0,
+    "short_trigger": 74887.5,
+    "long_stop_if_triggered": 81823.93752793208,
+    "short_stop_if_triggered": 80460.56247206792
+   }
+  ],
+  "context": {
+   "supertrend_15m": "bear",
+   "recent": [
+    "gap:bull 13h ago",
+    "flip:bear 7h ago",
+    "gap:bull 2h ago"
+   ]
+  }
+ },
+ "ETH": {
+  "price": 2715.39,
+  "days_of_history": 1095,
+  "setups": [
+   {
+    "rule": "TREND-55",
+    "signal": "none",
+    "atr_d": 85.46639189245158,
+    "trend_ok_long": true,
+    "long_trigger": 2807.1,
+    "short_trigger": 1851.45,
+    "long_stop_if_triggered": 2550.700824322645,
+    "short_stop_if_triggered": 2107.8491756773547
+   },
+   {
+    "rule": "TREND-20",
+    "signal": "none",
+    "atr_d": 85.46639189245158,
+    "trend_ok_long": true,
+    "long_trigger": 2807.1,
+    "short_trigger": 2356.82,
+    "long_stop_if_triggered": 2593.434020268871,
+    "short_stop_if_triggered": 2570.485979731129
+   }
+  ],
+  "context": {
+   "supertrend_15m": "bear",
+   "recent": [
+    "gap:bull 13h ago",
+    "flip:bear 6h ago",
+    "gap:bull 2h ago"
+   ]
+  }
+ },
+ "SOL": {
+  "price": 120.64,
+  "days_of_history": 1095,
+  "setups": [
+   {
+    "rule": "TREND-55",
+    "signal": "none",
+    "atr_d": 4.860113408043759,
+    "trend_ok_long": true,
+    "long_trigger": 124.93,
+    "short_trigger": 74.09,
+    "long_stop_if_triggered": 110.34965977586873,
+    "short_stop_if_triggered": 88.67034022413128
+   },
+   {
+    "rule": "TREND-20",
+    "signal": "none",
+    "atr_d": 4.860113408043759,
+    "trend_ok_long": true,
+    "long_trigger": 124.93,
+    "short_trigger": 95.71,
+    "long_stop_if_triggered": 112.77971647989061,
+    "short_stop_if_triggered": 107.86028352010939
+   }
+  ],
+  "context": {
+   "supertrend_15m": "bull",
+   "recent": [
+    "gap:bear 6h ago",
+    "gap:bull 3h ago",
+    "flip:bull 1h ago"
+   ]
+  }
+ },
+ "HYPE": {
+  "price": 94.761,
+  "days_of_history": 208,
+  "setups": [
+   {
+    "rule": "TREND-55",
+    "signal": "none",
+    "atr_d": 4.492013232579812,
+    "trend_ok_long": true,
+    "long_trigger": 97.999,
+    "short_trigger": 53.737,
+    "long_stop_if_triggered": 84.52296030226056,
+    "short_stop_if_triggered": 67.21303969773945
+   },
+   {
+    "rule": "TREND-20",
+    "signal": "none",
+    "atr_d": 4.492013232579812,
+    "trend_ok_long": true,
+    "long_trigger": 97.999,
+    "short_trigger": 75.15,
+    "long_stop_if_triggered": 86.76896691855046,
+    "short_stop_if_triggered": 86.38003308144954
+   }
+  ],
+  "context": {
+   "supertrend_15m": "bull",
+   "recent": [
+    "rally:bull 13h ago",
+    "gap:bull 13h ago",
+    "gap:bull 0h ago"
+   ]
+  },
+  "warning": "only ~200 days of history: rules not validated on this coin"
+ },
+ "ADA": {
+  "price": 0.26995,
+  "days_of_history": 1095,
+  "setups": [
+   {
+    "rule": "TREND-55",
+    "signal": "none",
+    "atr_d": 0.015830118345139175,
+    "trend_ok_long": true,
+    "long_trigger": 0.26523,
+    "short_trigger": 0.17106,
+    "long_stop_if_triggered": 0.21773964496458248,
+    "short_stop_if_triggered": 0.21855035503541753
+   },
+   {
+    "rule": "TREND-20",
+    "signal": "none",
+    "atr_d": 0.015830118345139175,
+    "trend_ok_long": true,
+    "long_trigger": 0.26523,
+    "short_trigger": 0.19012,
+    "long_stop_if_triggered": 0.22565470413715208,
+    "short_stop_if_triggered": 0.22969529586284795
+   }
+  ],
+  "context": {
+   "supertrend_15m": "bull",
+   "recent": [
+    "gap:bear 5h ago",
+    "flip:bull 0h ago",
+    "gap:bull 0h ago"
+   ]
+  }
+ }
+}

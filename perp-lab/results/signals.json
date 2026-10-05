@@ -4,7 +4,7 @@
   "donchian48": 1,
   "rsi_revert": 0,
   "funding_fade": 0,
-  "last": 85904.0,
+  "last": 85893.0,
   "funding_apr_%": 11.0
  },
  "ETH": {
@@ -20,7 +20,7 @@
   "donchian48": -1,
   "rsi_revert": 0,
   "funding_fade": 0,
-  "last": 120.62,
+  "last": 120.61,
   "funding_apr_%": 6.0
  },
  "HYPE": {
@@ -28,7 +28,7 @@
   "donchian48": 1,
   "rsi_revert": -1,
   "funding_fade": 0,
-  "last": 94.932,
+  "last": 94.724,
   "funding_apr_%": 9.9
  },
  "ADA": {
@@ -36,7 +36,7 @@
   "donchian48": 1,
   "rsi_revert": -1,
   "funding_fade": 0,
-  "last": 0.26965,
+  "last": 0.26891,
   "funding_apr_%": 14.0
  }
 }
