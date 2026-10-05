@@ -1,0 +1,12 @@
+{
+  "coins": ["BTC", "ETH", "SOL", "HYPE", "ADA"],
+  "interval": "1h",
+  "candles": 5000,
+  "fee_per_side": 0.0006,
+  "slippage_per_side": 0.0003,
+  "leverage": 2.0,
+  "maintenance_margin": 0.01,
+  "split": 0.6,
+  "risk": {"max_leverage": 3.0, "daily_loss_stop": 0.05, "max_drawdown_stop": 0.25},
+  "note": "fee/slippage are ASSUMPTIONS (Robinhood perp schedule not public here); public Hyperliquid data is a stand-in for price and funding."
+}

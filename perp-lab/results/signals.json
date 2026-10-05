@@ -1,0 +1,42 @@
+{
+ "BTC": {
+  "ema_trend": 1,
+  "donchian48": 1,
+  "rsi_revert": 0,
+  "funding_fade": 0,
+  "last": 85904.0,
+  "funding_apr_%": 11.0
+ },
+ "ETH": {
+  "ema_trend": 1,
+  "donchian48": 1,
+  "rsi_revert": 0,
+  "funding_fade": 0,
+  "last": 2715.8,
+  "funding_apr_%": 11.0
+ },
+ "SOL": {
+  "ema_trend": 1,
+  "donchian48": -1,
+  "rsi_revert": 0,
+  "funding_fade": 0,
+  "last": 120.62,
+  "funding_apr_%": 6.0
+ },
+ "HYPE": {
+  "ema_trend": 1,
+  "donchian48": 1,
+  "rsi_revert": -1,
+  "funding_fade": 0,
+  "last": 94.932,
+  "funding_apr_%": 9.9
+ },
+ "ADA": {
+  "ema_trend": 1,
+  "donchian48": 1,
+  "rsi_revert": -1,
+  "funding_fade": 0,
+  "last": 0.26965,
+  "funding_apr_%": 14.0
+ }
+}
