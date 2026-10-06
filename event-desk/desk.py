@@ -7,6 +7,7 @@
   desk.py sectors [--dry]     every sector, one email each (what launchd runs)
   desk.py sectors --missing   only sectors with no email sent today (the watchdog's catch-up)
   desk.py outbox              retry emails Gmail refused earlier (the watchdog runs this)
+  desk.py digest --resend     re-send today's Market Digest from its saved sections
   --prefix "[After hours]"    put a label in front of the subject (on-demand runs)
   desk.py jev-status          is a key in place, and how much is judged
 
@@ -527,10 +528,11 @@ def act_table(items):
             '&#9888; = earnings or a catalyst can land before expiry. Each spread is logged to the trade-core ledger and graded at expiry.</div>')
 
 
-def send_digest(c, test):
-    """One email with bio/pharma + every sector saved today and not yet delivered."""
+def send_digest(c, test, resend=False):
+    """One email with bio/pharma + every sector saved today and not yet delivered.
+    resend=True rebuilds it from every section saved today, even ones already sent."""
     d = os.path.join(DIGEST, dt.date.today().isoformat())
-    done = sent_today()
+    done = set() if resend else sent_today()
     items = []
     for fn in sorted(os.listdir(d)) if os.path.isdir(d) else []:
         with open(os.path.join(d, fn)) as f:
@@ -547,7 +549,7 @@ def send_digest(c, test):
              f'<ol style="margin:0;padding-left:20px;font-size:13px">{toc}</ol></div>'
              + "".join(f'<a name="{e(it["name"])}"></a>{it["body"]}' for it in items))
     _n, risk, gain = act_totals(items)
-    subject = (("[TEST] " if test else "") + "Event Desk · Market Digest: "
+    subject = (("[TEST] " if test else "") + ("[Resend] " if resend else "") + "Event Desk · Market Digest: "
                + (f"ACT {len(acts)} · risk ${risk:,.0f} · max profit ${gain:,.0f} · {'+'.join(acts)}" if acts else "no spread passes")
                + f" · {len(items)} sections")
     body, text = wrap_email("Daily digest · Options", "Market Digest: Bull Call Spread Setups and Event Impact for Health Care Plus S&P 500 Sectors",
@@ -555,6 +557,9 @@ def send_digest(c, test):
                             inner, {"text": f"{len(acts)} spread{'s' if len(acts) != 1 else ''} pass" if acts else "no spread passes", "tone": "good" if acts else "neutral"})
     names = [it["name"] for it in items]
     ok = send(c, subject, body, text)
+    if resend:   # one log row; the per-section rows the watchdog checks stay as they were
+        record_sent("digest-resend", subject, ok, test)
+        return log(f"digest resend {'sent' if ok else 'FAILED'}: {len(items)} sections")
     for n in names:
         record_sent(n, subject, ok, test)
     log(f"digest {'sent' if ok else 'FAILED'}: {len(items)} sections")
@@ -605,6 +610,9 @@ def main():
     test = "--test" in args
     if "--test-email" in args:
         sys.exit(0 if send(c, "Event desk: test email", "<p>Event desk email delivery works.</p>") else 1)
+    if args[:1] == ["digest"] and "--resend" in args:
+        send_digest(c, test, resend=True)
+        return
     if "--prefix" in args:   # its value is not a command
         i = args.index("--prefix")
         args = args[:i] + args[i + 2:] + args[i:i + 2]
