@@ -474,6 +474,13 @@ def save_section(name, subject, body, acts=None):
         json.dump({"name": name, "subject": subject, "body": body, "acts": acts or [], "t": time.time()}, f)
 
 
+def act_totals(items):
+    """(n, total risk $, total max profit $) over every ACT spread. cost and max_gain are per
+    position (qty already applied), so the totals are plain sums."""
+    acts = [t for it in items for t in it.get("acts", [])]
+    return len(acts), sum(t["cost"] for t in acts), sum(t["max_gain"] for t in acts)
+
+
 def act_table(items):
     """'Actionable now' across every sector: each ACT spread, its order ticket, and that sector's
     ledger record (graded at expiry against the market's own odds, after costs)."""
@@ -506,9 +513,16 @@ def act_table(items):
     if not rows:
         return ('<div style="background:#f3f3f3;padding:8px 10px;border-radius:4px;margin:10px 0">'
                 '<b>Actionable now: none.</b> No sector had a bull call spread pass the rules today.</div>')
+    n, risk, gain = act_totals(items)
+    totals = (f'<div style="background:#eef6ff;border:1px solid #bfdbfe;padding:8px 10px;border-radius:4px;margin:6px 0 8px;font-size:13.5px">'
+              f'<b>Totals for all {n} ACT spreads:</b> risk <b>${risk:,.0f}</b> (sum of debits — the most you can lose) · '
+              f'max profit <b>${gain:,.0f}</b> (if every spread finishes at or above its short strike) · '
+              f'reward/risk <b>{gain / risk:.2f}&#215;</b></div>') if risk else ""
+    foot = (f'<tr><td {TD}><b>TOTAL · {n}</b></td><td {TD}><b>risk ${risk:,.0f} · max ${gain:,.0f}</b></td>'
+            f'<td {TD}></td><td {TD}></td><td {TD}></td></tr>')
     return (f'<h3 style="margin:14px 0 4px">&#9989; Actionable now: {len(rows)} spread{"s" if len(rows) != 1 else ""} across sectors</h3>'
-            f'<table style="width:100%;border-collapse:collapse"><tr><th {TH}>Ticker</th><th {TH}>Order</th><th {TH}>Odds</th>'
-            f'<th {TH}>Ticket</th><th {TH}>Sector record</th></tr>{"".join(rows)}</table>'
+            f'{totals}<table style="width:100%;border-collapse:collapse"><tr><th {TH}>Ticker</th><th {TH}>Order</th><th {TH}>Odds</th>'
+            f'<th {TH}>Ticket</th><th {TH}>Sector record</th></tr>{"".join(rows)}{foot}</table>'
             '<div style="font-size:11.5px;color:#666">Tickets are never placed by Claude; you enter them yourself (option spreads need your Level 3 margin account). '
             '&#9888; = earnings or a catalyst can land before expiry. Each spread is logged to the trade-core ledger and graded at expiry.</div>')
 
@@ -532,7 +546,9 @@ def send_digest(c, test):
              f'<div style="margin:24px 0 8px;font:700 12px {FONT};letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid #e5e7eb;padding-bottom:6px">In this digest</div>'
              f'<ol style="margin:0;padding-left:20px;font-size:13px">{toc}</ol></div>'
              + "".join(f'<a name="{e(it["name"])}"></a>{it["body"]}' for it in items))
-    subject = (("[TEST] " if test else "") + "Event Desk · Market Digest: " + (f"ACT {'+'.join(acts)}" if acts else "no spread passes")
+    _n, risk, gain = act_totals(items)
+    subject = (("[TEST] " if test else "") + "Event Desk · Market Digest: "
+               + (f"ACT {len(acts)} · risk ${risk:,.0f} · max profit ${gain:,.0f} · {'+'.join(acts)}" if acts else "no spread passes")
                + f" · {len(items)} sections")
     body, text = wrap_email("Daily digest · Options", "Market Digest: Bull Call Spread Setups and Event Impact for Health Care Plus S&P 500 Sectors",
                             f"{dt.datetime.now():%A %b %d} · {len(items)} sections in one email · IV scan snapshots and news",
