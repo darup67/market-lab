@@ -78,5 +78,20 @@
     "data_dir": "~/market-iv-agent/data/sectors",
     "iv_run": "late-morning screen",
     "overrides": {}
+  },
+  "risk_overlay": {
+    "_comment": "2026-10-06 (user: 'enhance options IV'). Management and risk display for ACT spreads. It changes NO selection parameter: the same spreads are picked. Nothing here makes a spread risk-free or guarantees profit; the exit levels are standard conventions, not backtested (no historical option chains are available).",
+    "enabled": true,
+    "take_profit_pct_of_max_gain": 0.5,
+    "stop_pct_of_debit": 0.5,
+    "decide_days_before_expiry": 7,
+    "stress_moves": [
+      -0.1,
+      -0.05,
+      0.0,
+      0.05,
+      0.1
+    ],
+    "sector_concentration_flag": 0.4
   }
 }

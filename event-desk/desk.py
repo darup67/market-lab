@@ -151,7 +151,7 @@ def page(title, subtitle, body):
 
 
 def strip_tags(h):
-    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", h)).strip()
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", h))).strip()
 
 
 def wrap_email(kind, title, subtitle, body_html, status=None):
@@ -482,6 +482,101 @@ def act_totals(items):
     return len(acts), sum(t["cost"] for t in acts), sum(t["max_gain"] for t in acts)
 
 
+def _ov():
+    """risk_overlay settings with defaults; enabled=false turns the overlay off."""
+    o = dict(enabled=True, take_profit_pct_of_max_gain=0.5, stop_pct_of_debit=0.5,
+             decide_days_before_expiry=7, stress_moves=[-0.10, -0.05, 0.0, 0.05, 0.10],
+             sector_concentration_flag=0.40)
+    try:
+        o.update({k: v for k, v in (cfg().get("risk_overlay") or {}).items() if not k.startswith("_")})
+    except Exception:
+        pass
+    return o
+
+
+def _safe(fn, *a):
+    """The overlay is an extra: if it breaks, the digest still goes out without it."""
+    try:
+        return fn(*a)
+    except Exception as ex:
+        log(f"risk overlay skipped: {ex!r}")
+        return ""
+
+
+def spread_payoff(t, S):
+    """P/L in $ of the whole position (qty contracts) if the stock is at S on expiry day."""
+    width = t["short"] - t["long"]
+    value = min(max(S - t["long"], 0.0), width)
+    return (value - t["limit"]) * 100 * t["qty"]
+
+
+def mgmt_line(t):
+    """Exit plan and fill-cost note for one ACT spread. Conventions, not a forecast."""
+    o = _ov()
+    if not o["enabled"] or t["limit"] <= 0 or t["short"] <= t["long"]:
+        return ""
+    width, debit, q = t["short"] - t["long"], t["limit"], t["qty"]
+    tp_val = debit + o["take_profit_pct_of_max_gain"] * (width - debit)
+    st_val = debit * (1 - o["stop_pct_of_debit"])
+    decide = dt.date.fromisoformat(t["exp"]) - dt.timedelta(days=o["decide_days_before_expiry"])
+    parts = [f'Exit plan: take profit when it trades &#8805; <b>${tp_val:.2f}</b> (+${(tp_val - debit) * 100 * q:,.0f}) &middot; '
+             f'cut at &#8804; <b>${st_val:.2f}</b> (&minus;${(debit - st_val) * 100 * q:,.0f}) &middot; '
+             f'decide by {decide:%a %b %-d} (a week before expiry)']
+    nat = t.get("natural")
+    if nat and nat > debit + 0.005:
+        extra = (nat - debit) * 100 * q
+        g = (width - nat) * 100 * q
+        parts.append(f'Fill cost: paying the ask side (${nat:.2f}) adds ${extra:,.0f} and cuts max gain to ${g:,.0f}'
+                     + ('' if g > 0 else ' &mdash; <b>no profit left, skip</b>'))
+    if t.get("event_before_exp"):
+        parts.append('&#9888; Event before expiry: IV can collapse after it and lose money even if the stock rises')
+    return '<div style="font-size:11px;color:#555;margin-top:4px;line-height:1.45">' + "<br>".join(parts) + '</div>'
+
+
+def risk_overlay_html(items, ev):
+    """Portfolio view of every ACT spread: stress test, sector concentration, ledger evidence."""
+    o = _ov()
+    acts = [t for it in items for t in it.get("acts", [])]
+    if not o["enabled"] or not acts:
+        return ""
+    n, risk, gain = act_totals(items)
+    rows = []
+    for m in o["stress_moves"]:
+        pl = sum(spread_payoff(t, t["spot"] * (1 + m)) for t in acts)
+        win = sum(1 for t in acts if spread_payoff(t, t["spot"] * (1 + m)) > 0)
+        col = "#15803d" if pl > 0 else "#b91c1c"
+        rows.append(f'<tr><td {TD}>{m:+.0%}</td><td {TD}><b style="color:{col}">{"+" if pl >= 0 else "&minus;"}${abs(pl):,.0f}</b></td>'
+                    f'<td {TD}>{win} of {n} in profit</td></tr>')
+    by = {}
+    for t in acts:
+        s = t.get("sector_title") or t.get("sector") or "?"
+        by[s] = by.get(s, 0.0) + t["cost"]
+    top = sorted(by.items(), key=lambda kv: -kv[1])
+    conc = " &middot; ".join(f'{e(s)} ${v:,.0f} ({v / risk:.0%})' for s, v in top[:4])
+    flag = top[0][1] / risk >= o["sector_concentration_flag"]
+    grp = [v for k, v in (ev.get("groups") or {}).items() if k.startswith("market-iv|spread:")]
+    star = [g["*"] for g in grp if g.get("*")]
+    gn = sum(g["n"] for g in star)
+    if gn:
+        gw = sum(g["win"] * g["n"] for g in star) / gn
+        gb = sum(g["baseline"] * g["n"] for g in star) / gn
+        proven = any(g.get("proven") for g in star)
+        evid = (f'{gn} graded so far, {gw:.0%} profitable vs {gb:.0%} market odds &mdash; '
+                + ('PROVEN in at least one sector' if proven else
+                   '<b>not proven</b> (needs 30+ graded over 10+ days per sector; early marks in a rising market say little)'))
+    else:
+        evid = 'no graded spreads yet &mdash; <b>not proven</b>'
+    return (
+        '<h3 style="margin:16px 0 4px">&#128737; Risk controls for these spreads</h3>'
+        '<div style="font-size:12px;color:#555;margin-bottom:6px">Defined risk is not zero risk: each spread can lose its whole debit, '
+        'and at ~60% odds about 4 in 10 lose by design. Nothing below guarantees a profit.</div>'
+        f'<table style="border-collapse:collapse"><tr><th {TH}>If every stock moves</th><th {TH}>Total P/L at expiry</th><th {TH}>Winners</th></tr>{"".join(rows)}</table>'
+        f'<div style="font-size:12px;margin:6px 0">These spreads are mostly the same trade (a rising market). Risk by sector: {conc}'
+        + (' &#9888; <b>concentrated</b>' if flag else '') + '.</div>'
+        f'<div style="font-size:12px;color:#555;margin:2px 0 8px"><b>Ledger evidence:</b> {evid}. '
+        'Exit levels above are conventions, not backtested (no historical option chains exist to test them).</div>')
+
+
 def act_table(items):
     """'Actionable now' across every sector: each ACT spread, its order ticket, and that sector's
     ledger record (graded at expiry against the market's own odds, after costs)."""
@@ -507,7 +602,7 @@ def act_table(items):
                 f'<tr><td {TD}>{e(t.get("emoji", ""))} <b>{e(t["ticker"])}</b>{" &#9888;" if t.get("event_before_exp") else ""}'
                 f'<br><span style="color:#666;font-size:12px">{e(t.get("sector_title", it["name"]))} · ${t["spot"]:.2f}</span></td>'
                 f'<td {TD}>Buy {e(t["exp"][5:])} ${t["long"]:g}C / Sell ${t["short"]:g}C<br><b>${t["limit"]:.2f}</b> × {t["qty"]}'
-                f' · risk ${t["cost"]:,.0f} · max ${t["max_gain"]:,.0f}</td>'
+                f' · risk ${t["cost"]:,.0f} · max ${t["max_gain"]:,.0f}{_safe(mgmt_line, t)}</td>'
                 f'<td {TD}>P(profit) <b>{t["p_profit"]:.0%}</b><br>BE ${t["be"]:.2f} ({t["be"] / t["spot"] - 1:+.1%})</td>'
                 f'<td {TD}>{tcell}</td>'
                 f'<td {TD}><span style="font-size:12px">{e(rec)}</span></td></tr>')
@@ -525,7 +620,8 @@ def act_table(items):
             f'{totals}<table style="width:100%;border-collapse:collapse"><tr><th {TH}>Ticker</th><th {TH}>Order</th><th {TH}>Odds</th>'
             f'<th {TH}>Ticket</th><th {TH}>Sector record</th></tr>{"".join(rows)}{foot}</table>'
             '<div style="font-size:11.5px;color:#666">Tickets are never placed by Claude; you enter them yourself (option spreads need your Level 3 margin account). '
-            '&#9888; = earnings or a catalyst can land before expiry. Each spread is logged to the trade-core ledger and graded at expiry.</div>')
+            '&#9888; = earnings or a catalyst can land before expiry. Each spread is logged to the trade-core ledger and graded at expiry.</div>'
+            + _safe(risk_overlay_html, items, ev))
 
 
 def send_digest(c, test, resend=False):
