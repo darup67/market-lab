@@ -591,23 +591,26 @@ def check_jevdesk():
               f"~/jev-desk/data/heartbeat.json is {'missing' if age is None else f'{int(age // 60)} min old'} (ticks every 60 s). "
               "The watchdog kickstarted com.dhruv.jevdesk.main.\n\nSee ~/jev-desk/main.err.log.", every_hours=3)
         return note("jev desk", "fail", f"heartbeat {'missing' if age is None else f'{int(age // 60)}m old'}; kicked")
-    held, mode = hb.get("held"), hb.get("mode")
-    if held and not held.get("shadow") and held.get("sell_fails", 0) >= 3:
-        alert("jevdesk-sell", f"Jev desk cannot sell {held['ticker']}",
-              f"Live position {held['ticker']} on {held['chain']}: the RISK sell has failed {held['sell_fails']} times "
-              f"(retrying every minute). Check ~/jev-desk/main.err.log; manual: cd ~/jev-desk && .venv/bin/python main.py sell-now",
+    mode = hb.get("mode")
+    positions = hb.get("positions") if "positions" in hb else ([hb["held"]] if hb.get("held") else [])
+    stuck = [p for p in positions if not p.get("shadow") and p.get("sell_fails", 0) >= 3]
+    if stuck:
+        p = stuck[0]
+        alert("jevdesk-sell", f"Jev desk cannot sell {p['ticker']}",
+              f"Live position {p['ticker']} on {p['chain']}: the exit sell has failed {p['sell_fails']} times "
+              f"(retrying every 15 s). Check ~/jev-desk/main.err.log; manual: cd ~/jev-desk && .venv/bin/python main.py sell-now {p['ticker']}",
               every_hours=1)
-        return note("jev desk", "fail", f"live sell of {held['ticker']} failing x{held['sell_fails']}")
+        return note("jev desk", "fail", f"live sell of {p['ticker']} failing x{p['sell_fails']}")
     scan_age = time.time() - (hb.get("last_scan") or 0)
-    if not held and scan_age > 45 * 60:
+    if len(positions) < hb.get("max_positions", 1) and scan_age > 30 * 60:
         note("jev desk", "fail", f"no scan for {int(scan_age // 60)}m")
-        alert("jevdesk-scan", "Jev desk stopped scanning", f"Last scan {int(scan_age // 60)} minutes ago (every 15 min, nothing held). "
-              "If live, today's loss limit may have been hit (main.py status).", every_hours=6)
+        alert("jevdesk-scan", "Jev desk stopped scanning", f"Last scan {int(scan_age // 60)} minutes ago (every 5 min while there is room "
+              "for a position). If live, today's loss limit may have been hit (main.py status).", every_hours=6)
         return
     if not subprocess.run(["/usr/bin/security", "find-generic-password", "-s", "typesafe-jev"], capture_output=True).returncode == 0:
         return note("jev desk", "warn", f"{mode}; no Jev key yet, so no picks (python3 ~/jev-client/jev.py --set-key)")
-    note("jev desk", "ok", f"{mode}; " + (f"holding {held['ticker']} {held['minutes']}m ({held['status']})" if held else f"last scan {int(scan_age // 60)}m ago"))
-
+    held = ", ".join(f"{p['ticker']} {p['pct']:+.0%}" if p.get("pct") is not None else p["ticker"] for p in positions)
+    note("jev desk", "ok", f"{mode}; {len(positions)} position(s){': ' + held if held else ''}; last scan {int(scan_age // 60)}m ago")
 
 def check_jev_budget():
     """Jev (TypeSafe) spend this calendar month across every agent vs ~/jev-client/budget.json.
