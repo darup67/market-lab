@@ -612,6 +612,36 @@ def check_jevdesk():
     held = ", ".join(f"{p['ticker']} {p['pct']:+.0%}" if p.get("pct") is not None else p["ticker"] for p in positions)
     note("jev desk", "ok", f"{mode}; {len(positions)} position(s){': ' + held if held else ''}; last scan {int(scan_age // 60)}m ago")
 
+def check_jevdesk_grads():
+    """Live pump.fun graduation feed (~/jev-desk/grads.py, com.dhruv.jevdesk.grads, KeepAlive, Helius websocket).
+    Heartbeat every 30 s; graduations never stop for an hour, so a connected feed with none means it is deaf."""
+    base = os.path.join(HOME, "jev-desk")
+    label = "com.dhruv.jevdesk.grads"
+    if not os.path.exists(os.path.join(HOME, "Library", "LaunchAgents", f"{label}.plist")):
+        return
+    if not job(label)["loaded"]:
+        kick(label)
+        alert("jevgrads-unloaded", "Jev desk graduation feed was not loaded", f"{label} was not loaded; the watchdog tried to load it.", every_hours=6)
+        return note("jev grads", "fail", "job was unloaded; reloaded")
+    hb = jload(os.path.join(base, "data", "grads.json"), None)
+    age = time.time() - hb["t"] if hb else None
+    if age is None or age > 5 * 60 or not hb.get("connected"):
+        if attempt("jevgrads-kick", 6):
+            kick(label)
+        alert("jevgrads-stale", "Jev desk graduation feed down",
+              f"~/jev-desk/data/grads.json: {'missing' if age is None else f'{int(age)} s old'}, connected={hb and hb.get('connected')}. "
+              "Kickstarted com.dhruv.jevdesk.grads. See ~/jev-desk/grads.err.log.", every_hours=3)
+        return note("jev grads", "fail", "feed down; kicked")
+    up = time.time() - hb.get("up_since", time.time())
+    if hb["graduations_last_hour"] == 0 and up > 3600:
+        note("jev grads", "warn", "connected but no graduations in the last hour")
+        alert("jevgrads-deaf", "Jev desk graduation feed hears nothing",
+              "Connected for over an hour with zero pump.fun graduations (normally ~50/hour). The migration account "
+              "may have changed, or the Helius key/plan stopped delivering. ~/jev-desk/grads.py --status", every_hours=6)
+        return
+    note("jev grads", "ok", f"{hb['graduations_last_hour']} graduations/hour via {hb['provider']}")
+
+
 def check_jev_budget():
     """Jev (TypeSafe) spend this calendar month across every agent vs ~/jev-client/budget.json.
     The clients themselves refuse calls past the cap; this emails at 80% and when it is hit."""
@@ -819,7 +849,7 @@ def main():
         check_flip(trading)
     except Exception as ex:
         note("flip notifier", "fail", f"watchdog error {ex!r}")
-    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_jevdesk, check_jev_budget, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
+    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_jevdesk, check_jevdesk_grads, check_jev_budget, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
         try:
             fn()
         except Exception as ex:
