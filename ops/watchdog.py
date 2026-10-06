@@ -593,6 +593,26 @@ def check_jevdesk():
         return note("jev desk", "fail", f"heartbeat {'missing' if age is None else f'{int(age // 60)}m old'}; kicked")
     mode = hb.get("mode")
     positions = hb.get("positions") if "positions" in hb else ([hb["held"]] if hb.get("held") else [])
+    scan_alive = time.time() - (hb.get("scan_thread_at") or time.time())
+    if scan_alive > 15 * 60:                          # exits still tick but the scan thread is hung
+        if attempt("jevdesk-scan-kick", 4):
+            kick(label)
+        alert("jevdesk-scanthread", "Jev desk scan thread hung", f"The scan thread has not looped for {int(scan_alive // 60)} min "
+              "while exits kept running. The watchdog kickstarted com.dhruv.jevdesk.main.", every_hours=3)
+        return note("jev desk", "fail", f"scan thread silent {int(scan_alive // 60)}m; kicked")
+    low = [ch for ch, v in (hb.get("gas") or {}).items() if v is not None and v < 2 * (hb.get("min_gas") or {}).get(ch, 0)]
+    if low:
+        alert("jevdesk-gas", f"Jev desk wallet low on gas ({', '.join(low)})",
+              "Fee balance below twice the minimum: " + ", ".join(f"{ch} {hb['gas'][ch]}" for ch in low) +
+              ". Live buys stop at the minimum and live SELLS need gas too. Top up SOL / ETH (Base) from Coinbase.",
+              every_hours=12 if mode != "live" else 2)
+    if hb.get("breaker"):
+        alert("jevdesk-breaker", "Jev desk circuit breaker tripped",
+              f"{hb['breaker'].get('mode')} drawdown ${hb['breaker'].get('drawdown', 0):.2f} hit max_drawdown_usd. No new trades; open "
+              "positions still exit normally. Resume: cd ~/jev-desk && .venv/bin/python main.py reset-breaker", every_hours=12)
+    if (hb.get("errors_last_hour") or 0) >= 20:
+        alert("jevdesk-errors", f"Jev desk: {hb['errors_last_hour']} errors in the last hour",
+              "See ~/jev-desk/data/errors.jsonl and main.err.log.", every_hours=3)
     stuck = [p for p in positions if not p.get("shadow") and p.get("sell_fails", 0) >= 3]
     if stuck:
         p = stuck[0]
@@ -602,7 +622,7 @@ def check_jevdesk():
               every_hours=1)
         return note("jev desk", "fail", f"live sell of {p['ticker']} failing x{p['sell_fails']}")
     scan_age = time.time() - (hb.get("last_scan") or 0)
-    if len(positions) < hb.get("max_positions", 1) and scan_age > 30 * 60:
+    if len(positions) < hb.get("max_positions", 1) and scan_age > 30 * 60 and not hb.get("breaker") and not hb.get("loss_stop_today"):
         note("jev desk", "fail", f"no scan for {int(scan_age // 60)}m")
         alert("jevdesk-scan", "Jev desk stopped scanning", f"Last scan {int(scan_age // 60)} minutes ago (every 5 min while there is room "
               "for a position). If live, today's loss limit may have been hit (main.py status).", every_hours=6)
@@ -610,6 +630,8 @@ def check_jevdesk():
     if not subprocess.run(["/usr/bin/security", "find-generic-password", "-s", "typesafe-jev"], capture_output=True).returncode == 0:
         return note("jev desk", "warn", f"{mode}; no Jev key yet, so no picks (python3 ~/jev-client/jev.py --set-key)")
     held = ", ".join(f"{p['ticker']} {p['pct']:+.0%}" if p.get("pct") is not None else p["ticker"] for p in positions)
+    if hb.get("breaker") or low or (hb.get("errors_last_hour") or 0) >= 20:
+        return note("jev desk", "warn", f"{mode}; breaker={bool(hb.get('breaker'))} low_gas={low} errors/h={hb.get('errors_last_hour')}")
     note("jev desk", "ok", f"{mode}; {len(positions)} position(s){': ' + held if held else ''}; last scan {int(scan_age // 60)}m ago")
 
 def check_jevdesk_grads():

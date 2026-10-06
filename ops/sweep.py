@@ -15,7 +15,7 @@ import glob, json, os, subprocess, sys, time
 HOME = os.path.expanduser("~")
 HERE = os.path.dirname(os.path.abspath(__file__))
 DRY = "--dry" in sys.argv
-PROJECTS = ["flip-notifier", "coin-launch-agent", "market-lab", "market-lab/ops", "market-lab/paper-lab", "market-lab/event-desk",
+PROJECTS = ["flip-notifier", "coin-launch-agent", "jev-desk", "market-lab", "market-lab/ops", "market-lab/paper-lab", "market-lab/event-desk",
             "kalshi-btc-agent", "zillow-agent", "market-iv-agent", "asset-agents", "trade-core", "portfolio-agent", "flux-lab"]
 LOG_MAX, LOG_KEEP = 1_500_000, 300_000
 SHOT_DIRS = [os.path.join(HOME, "tradingview-mcp", "screenshots")]
