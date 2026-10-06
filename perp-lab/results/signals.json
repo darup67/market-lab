@@ -4,7 +4,7 @@
   "donchian48": 1,
   "rsi_revert": 0,
   "funding_fade": 0,
-  "last": 85893.0,
+  "last": 86120.0,
   "funding_apr_%": 11.0
  },
  "ETH": {
@@ -12,7 +12,7 @@
   "donchian48": 1,
   "rsi_revert": 0,
   "funding_fade": 0,
-  "last": 2715.8,
+  "last": 2707.0,
   "funding_apr_%": 11.0
  },
  "SOL": {
@@ -20,23 +20,23 @@
   "donchian48": -1,
   "rsi_revert": 0,
   "funding_fade": 0,
-  "last": 120.61,
-  "funding_apr_%": 6.0
+  "last": 120.08,
+  "funding_apr_%": 8.3
  },
  "HYPE": {
   "ema_trend": 1,
   "donchian48": 1,
-  "rsi_revert": -1,
+  "rsi_revert": 0,
   "funding_fade": 0,
-  "last": 94.724,
-  "funding_apr_%": 9.9
+  "last": 93.488,
+  "funding_apr_%": 10.9
  },
  "ADA": {
   "ema_trend": 1,
   "donchian48": 1,
-  "rsi_revert": -1,
+  "rsi_revert": 0,
   "funding_fade": 0,
-  "last": 0.26891,
-  "funding_apr_%": 14.0
+  "last": 0.27743,
+  "funding_apr_%": 11.0
  }
 }

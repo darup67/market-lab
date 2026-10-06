@@ -1,0 +1,5 @@
+BTC {'ema_trend': 1, 'donchian48': 1, 'rsi_revert': 0, 'funding_fade': 0, 'last': np.float64(86120.0), 'funding_apr_%': np.float64(11.0)}
+ETH {'ema_trend': 1, 'donchian48': 1, 'rsi_revert': 0, 'funding_fade': 0, 'last': np.float64(2707.0), 'funding_apr_%': np.float64(11.0)}
+SOL {'ema_trend': 1, 'donchian48': -1, 'rsi_revert': 0, 'funding_fade': 0, 'last': np.float64(120.08), 'funding_apr_%': np.float64(8.3)}
+HYPE {'ema_trend': 1, 'donchian48': 1, 'rsi_revert': 0, 'funding_fade': 0, 'last': np.float64(93.488), 'funding_apr_%': np.float64(10.9)}
+ADA {'ema_trend': 1, 'donchian48': 1, 'rsi_revert': 0, 'funding_fade': 0, 'last': np.float64(0.27743), 'funding_apr_%': np.float64(11.0)}
