@@ -524,6 +524,8 @@ def check_git_storage():
 
 def check_prelaunch():
     """Pre-graduation collector (coin-launch prelaunch.py tick, every 5 min): the board file must be fresh."""
+    if os.path.exists(os.path.join(HOME, "coin-launch-agent", "PAUSED.md")):
+        return note("coin detector", "ok", "paused by the user (coin-launch-agent/PAUSED.md); Jev desk is the successor")
     cfg = json.load(open(os.path.join(HOME, "coin-launch-agent", "config.json")))
     if os.path.exists(os.path.join(HOME, "Library", "LaunchAgents", "com.dhruv.coinlaunch.pre.plist.disabled")):
         # ML add-ons (pre-graduation collector, plus50) unloaded 2026-09-29; the ORIGINAL watcher stays on with its original parameters
@@ -552,6 +554,8 @@ def check_prelaunch():
 
 def check_listed():
     """Coinbase/Robinhood-listed coin board (coin-launch-agent listed.py, every 15 min): must be fresh."""
+    if os.path.exists(os.path.join(HOME, "coin-launch-agent", "PAUSED.md")):
+        return                                       # reported once, under "coin detector"
     f = os.path.join(HOME, "coin-launch-agent", "data", "listed_board.json")
     try:
         b = json.load(open(f))
