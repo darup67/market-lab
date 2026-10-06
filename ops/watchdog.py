@@ -372,10 +372,12 @@ DEPS = os.path.join(HERE, "deps")
 VENVS = {   # name: (python, extra env the LaunchAgents set)
     "market-ml": (os.path.join(HOME, ".venvs", "market-ml", "bin", "python"),
                   {"DYLD_FALLBACK_LIBRARY_PATH": os.path.join(HOME, ".venvs/market-ml/lib/python3.11/site-packages/torch/lib")}),
+    "jev-desk": (os.path.join(HOME, "jev-desk", ".venv", "bin", "python"), {}),
 }
 PINS = {    # symlink: exact target it must resolve to
     os.path.join(HOME, ".local", "bin", "node"): os.path.join(HOME, ".local/opt/node-v22.22.3/bin/node"),
     os.path.join(HOME, ".venvs", "market-ml", "bin", "python"): os.path.join(HOME, ".local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3.11"),
+    os.path.join(HOME, "jev-desk", ".venv", "bin", "python"): os.path.join(HOME, ".local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3.11"),
 }
 KEEPALIVE_OK = {-15, -9}   # a long-running agent restarted by launchd reports its predecessor's signal
 
@@ -455,7 +457,7 @@ def check_platform():
         note("platform", "ok", f"pins intact, imports {'match baseline' if imports_due else 'checked daily'}, {free_gb:.0f} GB free")
 
 
-REPOS = ["asset-agents", "coin-launch-agent", "flip-notifier", "flux-lab", "jev-client", "kalshi-btc-agent", "kalshi-btc-1h-agent", "kalshi-commodity-agent",
+REPOS = ["asset-agents", "coin-launch-agent", "flip-notifier", "flux-lab", "jev-client", "jev-desk", "kalshi-btc-agent", "kalshi-btc-1h-agent", "kalshi-commodity-agent",
          "market-iv-agent", "market-lab", "portfolio-agent", "trade-core", "zillow-agent"]
 GIT = "/usr/local/bin/git"   # absolute: /usr/bin/git is the CLT stub and pops an install dialog
 
@@ -562,6 +564,45 @@ def check_listed():
     else:
         c = b["counts"]
         note("listed board", "ok", f"{b['universe']} scored, {c['clean']} clean (fast+steady+holding)")
+
+
+def check_jevdesk():
+    """Jev memecoin desk (~/jev-desk, com.dhruv.jevdesk.main, KeepAlive loop ticking every 60 s).
+    Heartbeat must be fresh; scans must keep coming while nothing is held; in live mode a RISK
+    sell that keeps failing is urgent (money is stuck in a token). Repair = kickstart the job."""
+    base = os.path.join(HOME, "jev-desk")
+    if not os.path.isdir(base):
+        return
+    label = "com.dhruv.jevdesk.main"
+    if not job(label)["loaded"]:
+        kick(label)
+        alert("jevdesk-unloaded", "Jev desk was not loaded", f"{label} was not loaded in launchd; the watchdog tried to load it.", every_hours=6)
+        return note("jev desk", "fail", "job was unloaded; reloaded")
+    hb = jload(os.path.join(base, "data", "heartbeat.json"), None)
+    age = time.time() - hb["t"] if hb else None
+    if age is None or age > 10 * 60:
+        if attempt("jevdesk-kick", 4):
+            kick(label)
+        alert("jevdesk-stale", "Jev desk loop not ticking",
+              f"~/jev-desk/data/heartbeat.json is {'missing' if age is None else f'{int(age // 60)} min old'} (ticks every 60 s). "
+              "The watchdog kickstarted com.dhruv.jevdesk.main.\n\nSee ~/jev-desk/main.err.log.", every_hours=3)
+        return note("jev desk", "fail", f"heartbeat {'missing' if age is None else f'{int(age // 60)}m old'}; kicked")
+    held, mode = hb.get("held"), hb.get("mode")
+    if held and not held.get("shadow") and held.get("sell_fails", 0) >= 3:
+        alert("jevdesk-sell", f"Jev desk cannot sell {held['ticker']}",
+              f"Live position {held['ticker']} on {held['chain']}: the RISK sell has failed {held['sell_fails']} times "
+              f"(retrying every minute). Check ~/jev-desk/main.err.log; manual: cd ~/jev-desk && .venv/bin/python main.py sell-now",
+              every_hours=1)
+        return note("jev desk", "fail", f"live sell of {held['ticker']} failing x{held['sell_fails']}")
+    scan_age = time.time() - (hb.get("last_scan") or 0)
+    if not held and scan_age > 45 * 60:
+        note("jev desk", "fail", f"no scan for {int(scan_age // 60)}m")
+        alert("jevdesk-scan", "Jev desk stopped scanning", f"Last scan {int(scan_age // 60)} minutes ago (every 15 min, nothing held). "
+              "If live, today's loss limit may have been hit (main.py status).", every_hours=6)
+        return
+    if not subprocess.run(["/usr/bin/security", "find-generic-password", "-s", "typesafe-jev"], capture_output=True).returncode == 0:
+        return note("jev desk", "warn", f"{mode}; no Jev key yet, so no picks (python3 ~/jev-client/jev.py --set-key)")
+    note("jev desk", "ok", f"{mode}; " + (f"holding {held['ticker']} {held['minutes']}m ({held['status']})" if held else f"last scan {int(scan_age // 60)}m ago"))
 
 
 def check_kalshi_commodity():
@@ -749,7 +790,7 @@ def main():
         check_flip(trading)
     except Exception as ex:
         note("flip notifier", "fail", f"watchdog error {ex!r}")
-    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
+    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_jevdesk, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
         try:
             fn()
         except Exception as ex:
