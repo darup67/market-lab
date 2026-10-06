@@ -593,6 +593,8 @@ def check_jevdesk():
         return note("jev desk", "fail", f"heartbeat {'missing' if age is None else f'{int(age // 60)}m old'}; kicked")
     mode = hb.get("mode")
     positions = hb.get("positions") if "positions" in hb else ([hb["held"]] if hb.get("held") else [])
+    if hb.get("offline"):                             # the Mac has no internet: the desk is deliberately paused, not broken
+        return note("jev desk", "warn", f"{mode}; Mac offline since {time.strftime('%H:%M', time.localtime(hb.get('offline_since') or time.time()))}: entries paused, positions held")
     scan_alive = time.time() - (hb.get("scan_thread_at") or time.time())
     if scan_alive > 15 * 60:                          # exits still tick but the scan thread is hung
         if attempt("jevdesk-scan-kick", 4):
