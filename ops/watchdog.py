@@ -609,6 +609,28 @@ def check_jevdesk():
     note("jev desk", "ok", f"{mode}; " + (f"holding {held['ticker']} {held['minutes']}m ({held['status']})" if held else f"last scan {int(scan_age // 60)}m ago"))
 
 
+def check_jev_budget():
+    """Jev (TypeSafe) spend this calendar month across every agent vs ~/jev-client/budget.json.
+    The clients themselves refuse calls past the cap; this emails at 80% and when it is hit."""
+    sys.path.insert(0, os.path.join(HOME, "jev-client"))
+    import jev
+    spent, cap = jev.month_spend()
+    pct = 100 * spent / cap if cap else 100
+    if pct >= 100:
+        note("jev budget", "fail", f"${spent:.2f} of ${cap:.2f}: Jev calls are being refused")
+        alert("jev-budget-hit", f"Jev monthly budget reached (${cap:.0f})",
+              f"Jev spend this month is ${spent:.2f} of the ${cap:.2f} cap in ~/jev-client/budget.json. Every agent's Jev calls "
+              "are refused until next month (the agents carry on without Jev).\n\nSee python3 ~/jev-client/jev.py --usage for who spent it.",
+              every_hours=24)
+    elif pct >= 80:
+        note("jev budget", "warn", f"${spent:.2f} of ${cap:.2f} ({pct:.0f}%)")
+        alert("jev-budget-80", f"Jev spend at {pct:.0f}% of the monthly budget",
+              f"${spent:.2f} of ${cap:.2f} this month. Calls stop at the cap.\n\npython3 ~/jev-client/jev.py --usage shows the spend by agent.",
+              every_hours=24)
+    else:
+        note("jev budget", "ok", f"${spent:.4f} of ${cap:.2f} this month ({pct:.2f}%)")
+
+
 def check_kalshi_commodity():
     """Kalshi gold/WTI 15m caller (~/kalshi-commodity-agent, launchd every minute): the job must be loaded, each
     asset's evals log fresh while Kalshi has an open window for it, the weekly recalibration current, and a GitHub
@@ -794,7 +816,7 @@ def main():
         check_flip(trading)
     except Exception as ex:
         note("flip notifier", "fail", f"watchdog error {ex!r}")
-    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_jevdesk, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
+    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_jevdesk, check_jev_budget, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
         try:
             fn()
         except Exception as ex:
