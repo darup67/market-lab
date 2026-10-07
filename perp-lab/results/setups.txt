@@ -1,20 +1,20 @@
-PERP SETUPS (paper/information only) · Tue Oct 06 08:32 · risk 1% of equity per trade, leverage cap 3x
+PERP SETUPS (paper/information only) · Wed Oct 07 08:35 · risk 1% of equity per trade, leverage cap 3x
 
-BTC  $86,150   15m SuperTrend bull   recent detector: flip:bull 4h ago, rally:bull 4h ago, gap:bull 3h ago
-   TREND-55: no setup. LONG if a daily close > 87,397 (stop then ~80,747); SHORT if a daily close < 62,468 (stop then ~69,118). Trend filter up.
-   TREND-20: no setup. LONG if a daily close > 87,397 (stop then ~81,856); SHORT if a daily close < 74,888 (stop then ~80,429). Trend filter up.
-ETH  $2,708   15m SuperTrend bear   recent detector: gap:bear 9h ago, flip:bull 4h ago, flip:bear 3h ago
-   TREND-55: no setup. LONG if a daily close > 2,807 (stop then ~2,556); SHORT if a daily close < 1,851 (stop then ~2,102). Trend filter up.
-   TREND-20: no setup. LONG if a daily close > 2,807 (stop then ~2,598); SHORT if a daily close < 2,357 (stop then ~2,566). Trend filter up.
-SOL  $120.2   15m SuperTrend bear   recent detector: flip:bear 11h ago, flip:bull 4h ago, flip:bear 3h ago
-   TREND-55: no setup. LONG if a daily close > 124.9 (stop then ~110.7); SHORT if a daily close < 74.09 (stop then ~88.31). Trend filter up.
-   TREND-20: no setup. LONG if a daily close > 124.9 (stop then ~113.1); SHORT if a daily close < 95.71 (stop then ~107.6). Trend filter up.
-HYPE  $93.42   15m SuperTrend bull   recent detector: flip:bear 9h ago, gap:bear 8h ago, flip:bull 0h ago
-   TREND-55: no setup. LONG if a daily close > 98.00 (stop then ~84.32); SHORT if a daily close < 53.74 (stop then ~67.42). Trend filter up.
-   TREND-20: no setup. LONG if a daily close > 98.00 (stop then ~86.60); SHORT if a daily close < 75.15 (stop then ~86.55). Trend filter up.
+BTC  $83,508   15m SuperTrend bear   recent detector: gap:bear 19h ago, rally:bear 10h ago, gap:bear 9h ago
+   TREND-55: no setup. LONG if a daily close > 87,397 (stop then ~80,880); SHORT if a daily close < 62,468 (stop then ~68,985). Trend filter up.
+   TREND-20: no setup. LONG if a daily close > 87,397 (stop then ~81,966); SHORT if a daily close < 74,912 (stop then ~80,343). Trend filter up.
+ETH  $2,575   15m SuperTrend bear   recent detector: gap:bear 2h ago, rally:bear 2h ago, gap:bear 1h ago
+   TREND-55: no setup. LONG if a daily close > 2,807 (stop then ~2,565); SHORT if a daily close < 1,861 (stop then ~2,103). Trend filter up.
+   TREND-20: no setup. LONG if a daily close > 2,807 (stop then ~2,606); SHORT if a daily close < 2,366 (stop then ~2,568). Trend filter up.
+SOL  $116.8   15m SuperTrend bear   recent detector: rally:bear 10h ago, gap:bear 9h ago, gap:bear 2h ago
+   TREND-55: no setup. LONG if a daily close > 124.9 (stop then ~111.1); SHORT if a daily close < 74.09 (stop then ~87.96). Trend filter up.
+   TREND-20: no setup. LONG if a daily close > 124.9 (stop then ~113.4); SHORT if a daily close < 96.00 (stop then ~107.6). Trend filter up.
+HYPE  $89.13   15m SuperTrend bear   recent detector: rally:bear 10h ago, gap:bear 9h ago, gap:bear 2h ago
+   TREND-55: no setup. LONG if a daily close > 98.00 (stop then ~84.49); SHORT if a daily close < 54.26 (stop then ~67.77). Trend filter up.
+   TREND-20: no setup. LONG if a daily close > 98.00 (stop then ~86.74); SHORT if a daily close < 76.62 (stop then ~87.88). Trend filter up.
    ! only ~200 days of history: rules not validated on this coin
-ADA  $0.2776   15m SuperTrend bull   recent detector: flip:bear 11h ago, flip:bull 7h ago, gap:bull 3h ago
-   TREND-55: LONG  entry ~0.2776  stop 0.2294 (17.4%)  target 0.5184  size 0.06x equity  hold<=40d  (signal 2026-10-05)
-   TREND-20: LONG  entry ~0.2776  stop 0.2375 (14.5%)  target 0.3980  size 0.07x equity  hold<=40d  (signal 2026-10-05)
+ADA  $0.2554   15m SuperTrend bear   recent detector: rally:bear 10h ago, gap:bear 9h ago, gap:bear 2h ago
+   TREND-55: no setup. LONG if a daily close > 0.2767 (stop then ~0.2284); SHORT if a daily close < 0.1711 (stop then ~0.2194). Trend filter up.
+   TREND-20: no setup. LONG if a daily close > 0.2767 (stop then ~0.2365); SHORT if a daily close < 0.1901 (stop then ~0.2304). Trend filter up.
 
 Proven? TREND-55 and TREND-20 were positive out-of-sample in 4 of 4 coins in a ~3-year test (24 and 52 OOS trades): promising, small sample. The 15m detector long/short mirrors were NOT better than random after costs.

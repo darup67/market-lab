@@ -1,184 +1,172 @@
 {
  "BTC": {
-  "price": 86149.84,
-  "days_of_history": 1096,
+  "price": 83507.89,
+  "days_of_history": 1095,
   "setups": [
    {
     "rule": "TREND-55",
     "signal": "none",
-    "atr_d": 2216.5517753395147,
+    "atr_d": 2172.393791386693,
     "trend_ok_long": true,
     "long_trigger": 87397.0,
     "short_trigger": 62468.21,
-    "long_stop_if_triggered": 80747.34467398145,
-    "short_stop_if_triggered": 69117.86532601854
+    "long_stop_if_triggered": 80879.81862583992,
+    "short_stop_if_triggered": 68985.39137416008
    },
    {
     "rule": "TREND-20",
     "signal": "none",
-    "atr_d": 2216.5517753395147,
+    "atr_d": 2172.393791386693,
     "trend_ok_long": true,
     "long_trigger": 87397.0,
-    "short_trigger": 74887.5,
-    "long_stop_if_triggered": 81855.62056165122,
-    "short_stop_if_triggered": 80428.87943834878
+    "short_trigger": 74911.53,
+    "long_stop_if_triggered": 81966.01552153326,
+    "short_stop_if_triggered": 80342.51447846674
    }
   ],
   "context": {
-   "supertrend_15m": "bull",
+   "supertrend_15m": "bear",
    "recent": [
-    "flip:bull 4h ago",
-    "rally:bull 4h ago",
-    "gap:bull 3h ago"
+    "gap:bear 19h ago",
+    "rally:bear 10h ago",
+    "gap:bear 9h ago"
    ]
   }
  },
  "ETH": {
-  "price": 2708.39,
-  "days_of_history": 1096,
+  "price": 2575,
+  "days_of_history": 1095,
   "setups": [
    {
     "rule": "TREND-55",
     "signal": "none",
-    "atr_d": 83.57236390013364,
+    "atr_d": 80.58790933583838,
     "trend_ok_long": true,
     "long_trigger": 2807.1,
-    "short_trigger": 1851.45,
-    "long_stop_if_triggered": 2556.382908299599,
-    "short_stop_if_triggered": 2102.1670917004008
+    "short_trigger": 1860.81,
+    "long_stop_if_triggered": 2565.336271992485,
+    "short_stop_if_triggered": 2102.573728007515
    },
    {
     "rule": "TREND-20",
     "signal": "none",
-    "atr_d": 83.57236390013364,
+    "atr_d": 80.58790933583838,
     "trend_ok_long": true,
     "long_trigger": 2807.1,
-    "short_trigger": 2356.82,
-    "long_stop_if_triggered": 2598.1690902496657,
-    "short_stop_if_triggered": 2565.7509097503344
+    "short_trigger": 2366.37,
+    "long_stop_if_triggered": 2605.630226660404,
+    "short_stop_if_triggered": 2567.839773339596
    }
   ],
   "context": {
    "supertrend_15m": "bear",
    "recent": [
-    "gap:bear 9h ago",
-    "flip:bull 4h ago",
-    "flip:bear 3h ago"
+    "gap:bear 2h ago",
+    "rally:bear 2h ago",
+    "gap:bear 1h ago"
    ]
   }
  },
  "SOL": {
-  "price": 120.2,
-  "days_of_history": 1096,
+  "price": 116.78,
+  "days_of_history": 1095,
   "setups": [
    {
     "rule": "TREND-55",
     "signal": "none",
-    "atr_d": 4.739391021754919,
+    "atr_d": 4.624434520200996,
     "trend_ok_long": true,
     "long_trigger": 124.93,
     "short_trigger": 74.09,
-    "long_stop_if_triggered": 110.71182693473526,
-    "short_stop_if_triggered": 88.30817306526475
+    "long_stop_if_triggered": 111.05669643939702,
+    "short_stop_if_triggered": 87.963303560603
    },
    {
     "rule": "TREND-20",
     "signal": "none",
-    "atr_d": 4.739391021754919,
+    "atr_d": 4.624434520200996,
     "trend_ok_long": true,
     "long_trigger": 124.93,
-    "short_trigger": 95.71,
-    "long_stop_if_triggered": 113.0815224456127,
-    "short_stop_if_triggered": 107.5584775543873
+    "short_trigger": 96.0,
+    "long_stop_if_triggered": 113.36891369949751,
+    "short_stop_if_triggered": 107.5610863005025
    }
   ],
   "context": {
    "supertrend_15m": "bear",
    "recent": [
-    "flip:bear 11h ago",
-    "flip:bull 4h ago",
-    "flip:bear 3h ago"
+    "rally:bear 10h ago",
+    "gap:bear 9h ago",
+    "gap:bear 2h ago"
    ]
   }
  },
  "HYPE": {
-  "price": 93.42,
+  "price": 89.134,
   "days_of_history": 208,
   "setups": [
    {
     "rule": "TREND-55",
     "signal": "none",
-    "atr_d": 4.559655246292553,
+    "atr_d": 4.503537017663807,
     "trend_ok_long": true,
     "long_trigger": 97.999,
-    "short_trigger": 53.737,
-    "long_stop_if_triggered": 84.32003426112234,
-    "short_stop_if_triggered": 67.41596573887766
+    "short_trigger": 54.264,
+    "long_stop_if_triggered": 84.48838894700857,
+    "short_stop_if_triggered": 67.77461105299142
    },
    {
     "rule": "TREND-20",
     "signal": "none",
-    "atr_d": 4.559655246292553,
+    "atr_d": 4.503537017663807,
     "trend_ok_long": true,
     "long_trigger": 97.999,
-    "short_trigger": 75.15,
-    "long_stop_if_triggered": 86.59986188426862,
-    "short_stop_if_triggered": 86.54913811573138
+    "short_trigger": 76.618,
+    "long_stop_if_triggered": 86.74015745584047,
+    "short_stop_if_triggered": 87.87684254415952
    }
   ],
   "context": {
-   "supertrend_15m": "bull",
+   "supertrend_15m": "bear",
    "recent": [
-    "flip:bear 9h ago",
-    "gap:bear 8h ago",
-    "flip:bull 0h ago"
+    "rally:bear 10h ago",
+    "gap:bear 9h ago",
+    "gap:bear 2h ago"
    ]
   },
   "warning": "only ~200 days of history: rules not validated on this coin"
  },
  "ADA": {
-  "price": 0.2776,
-  "days_of_history": 1096,
+  "price": 0.2554,
+  "days_of_history": 1095,
   "setups": [
    {
     "rule": "TREND-55",
-    "signal": "LONG",
-    "atr_d": 0.01605510989191495,
+    "signal": "none",
+    "atr_d": 0.016101887756778167,
     "trend_ok_long": true,
-    "long_trigger": 0.26853,
+    "long_trigger": 0.27671,
     "short_trigger": 0.17106,
-    "entry": 0.2776,
-    "stop": 0.22943467032425516,
-    "target": 0.5184266483787243,
-    "stop_pct": 17.35062308204065,
-    "size_x_equity": 0.06,
-    "risk_pct_equity": 1.0,
-    "max_hold_days": 40,
-    "signal_day": "2026-10-05"
+    "long_stop_if_triggered": 0.2284043367296655,
+    "short_stop_if_triggered": 0.2193656632703345
    },
    {
     "rule": "TREND-20",
-    "signal": "LONG",
-    "atr_d": 0.01605510989191495,
+    "signal": "none",
+    "atr_d": 0.016101887756778167,
     "trend_ok_long": true,
-    "long_trigger": 0.26853,
+    "long_trigger": 0.27671,
     "short_trigger": 0.19012,
-    "entry": 0.2776,
-    "stop": 0.23746222527021266,
-    "target": 0.39801332418936214,
-    "stop_pct": 14.45885256836721,
-    "size_x_equity": 0.07,
-    "risk_pct_equity": 1.0,
-    "max_hold_days": 40,
-    "signal_day": "2026-10-05"
+    "long_stop_if_triggered": 0.2364552806080546,
+    "short_stop_if_triggered": 0.23037471939194543
    }
   ],
   "context": {
-   "supertrend_15m": "bull",
+   "supertrend_15m": "bear",
    "recent": [
-    "flip:bear 11h ago",
-    "flip:bull 7h ago",
-    "gap:bull 3h ago"
+    "rally:bear 10h ago",
+    "gap:bear 9h ago",
+    "gap:bear 2h ago"
    ]
   }
  }
