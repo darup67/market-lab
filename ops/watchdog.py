@@ -721,6 +721,11 @@ def check_jevmarkets():
             kick(label)
             alert("jevmarkets-unloaded", "Jev Markets job was not loaded", f"{label} was not loaded in launchd; the watchdog tried to load it.", every_hours=6)
             return note("jev markets", "fail", f"{label.split('.')[-1]} was unloaded; reloaded")
+    lt = jload(os.path.join(base, "data", "live_tickets.json"), {})
+    for t in lt.values():
+        if t.get("type") == "exit" and t.get("status") == "pending" and time.time() - t["created"] > 3 * 60:
+            alert("jevmarkets-exit-ticket", f"Jev Markets EXIT ticket unplaced: {t['action']} {t['qty']} {t['symbol']}",
+                  f"A live position still needs closing at Robinhood ({t.get('reason', '')[:80]}). Run: cd ~/jev-markets && .venv/bin/python main.py tickets", every_hours=0.25)
     hb = jload(os.path.join(base, "data", "heartbeat.json"), None)
     age = time.time() - hb["t"] if hb else None
     if age is None or age > 10 * 60:
