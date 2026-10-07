@@ -373,11 +373,13 @@ VENVS = {   # name: (python, extra env the LaunchAgents set)
     "market-ml": (os.path.join(HOME, ".venvs", "market-ml", "bin", "python"),
                   {"DYLD_FALLBACK_LIBRARY_PATH": os.path.join(HOME, ".venvs/market-ml/lib/python3.11/site-packages/torch/lib")}),
     "jev-desk": (os.path.join(HOME, "jev-desk", ".venv", "bin", "python"), {}),
+    "jev-majors": (os.path.join(HOME, "jev-majors", ".venv", "bin", "python"), {}),
 }
 PINS = {    # symlink: exact target it must resolve to
     os.path.join(HOME, ".local", "bin", "node"): os.path.join(HOME, ".local/opt/node-v22.22.3/bin/node"),
     os.path.join(HOME, ".venvs", "market-ml", "bin", "python"): os.path.join(HOME, ".local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3.11"),
     os.path.join(HOME, "jev-desk", ".venv", "bin", "python"): os.path.join(HOME, ".local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3.11"),
+    os.path.join(HOME, "jev-majors", ".venv", "bin", "python"): os.path.join(HOME, ".local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3.11"),
 }
 KEEPALIVE_OK = {-15, -9}   # a long-running agent restarted by launchd reports its predecessor's signal
 
@@ -457,7 +459,7 @@ def check_platform():
         note("platform", "ok", f"pins intact, imports {'match baseline' if imports_due else 'checked daily'}, {free_gb:.0f} GB free")
 
 
-REPOS = ["asset-agents", "coin-launch-agent", "flip-notifier", "flux-lab", "jev-client", "jev-desk", "kalshi-btc-agent", "kalshi-btc-1h-agent", "kalshi-commodity-agent",
+REPOS = ["asset-agents", "coin-launch-agent", "flip-notifier", "flux-lab", "jev-client", "jev-desk", "jev-majors", "kalshi-btc-agent", "kalshi-btc-1h-agent", "kalshi-commodity-agent",
          "market-iv-agent", "market-lab", "portfolio-agent", "trade-core", "zillow-agent"]
 GIT = "/usr/local/bin/git"   # absolute: /usr/bin/git is the CLT stub and pops an install dialog
 
@@ -664,6 +666,43 @@ def check_jevdesk_grads():
               "may have changed, or the Helius key/plan stopped delivering. ~/jev-desk/grads.py --status", every_hours=6)
         return
     note("jev grads", "ok", f"{hb['graduations_last_hour']} graduations/hour via {hb['provider']}")
+
+
+def check_jevmajors():
+    """Jev Majors (~/jev-majors): Hyperliquid long/short perps desk. Jobs loaded, heartbeat and live data fresh, scan thread
+    alive, no breaker, errors low. Repair = kickstart the job. Entirely separate from check_jevdesk."""
+    base = os.path.join(HOME, "jev-majors")
+    if not os.path.isdir(base):
+        return
+    for label in ("com.dhruv.jevmajors.main", "com.dhruv.jevmajors.dashboard"):
+        if not job(label)["loaded"]:
+            kick(label)
+            alert("jevmajors-unloaded", "Jev Majors job was not loaded", f"{label} was not loaded in launchd; the watchdog tried to load it.", every_hours=6)
+            return note("jev majors", "fail", f"{label.split('.')[-1]} was unloaded; reloaded")
+    hb = jload(os.path.join(base, "data", "heartbeat.json"), None)
+    age = time.time() - hb["t"] if hb else None
+    if age is None or age > 10 * 60:
+        if attempt("jevmajors-kick", 4):
+            kick("com.dhruv.jevmajors.main")
+        alert("jevmajors-stale", "Jev Majors loop not ticking", f"~/jev-majors/data/heartbeat.json is {'missing' if age is None else f'{int(age // 60)} min old'}. Kickstarted com.dhruv.jevmajors.main; see ~/jev-majors/main.err.log.", every_hours=3)
+        return note("jev majors", "fail", "heartbeat stale; kicked")
+    if hb.get("offline"):
+        return note("jev majors", "warn", f"{hb.get('mode')}; Mac offline: entries paused")
+    scan_alive = time.time() - (hb.get("scan_thread_at") or time.time())
+    if scan_alive > 15 * 60:
+        if attempt("jevmajors-scan-kick", 4):
+            kick("com.dhruv.jevmajors.main")
+        alert("jevmajors-scanthread", "Jev Majors scan thread hung", f"No scan-loop pass for {int(scan_alive // 60)} min; kickstarted.", every_hours=3)
+        return note("jev majors", "fail", f"scan thread silent {int(scan_alive // 60)}m; kicked")
+    live = jload(os.path.join(base, "data", "live.json"), {})
+    if time.time() - live.get("t", 0) > 180:
+        return note("jev majors", "fail", "market snapshot stale: the Hyperliquid feed is not updating")
+    if hb.get("breaker"):
+        alert("jevmajors-breaker", "Jev Majors circuit breaker tripped", "Drawdown limit hit; no new trades. Resume: cd ~/jev-majors && .venv/bin/python main.py reset-breaker", every_hours=12)
+    if (hb.get("errors_last_hour") or 0) >= 20:
+        alert("jevmajors-errors", f"Jev Majors: {hb['errors_last_hour']} errors in the last hour", "See ~/jev-majors/data/errors.jsonl and main.err.log.", every_hours=3)
+    sat = [p for p in hb.get("positions", []) if not p.get("shadow")]
+    note("jev majors", "warn" if hb.get("breaker") else "ok", f"{hb.get('mode')}; {len(hb.get('positions', []))} position(s) ({len(sat)} live); last scan {int((time.time() - (hb.get('last_scan') or 0)) / 60)}m ago")
 
 
 def check_jev_budget():
@@ -873,7 +912,7 @@ def main():
         check_flip(trading)
     except Exception as ex:
         note("flip notifier", "fail", f"watchdog error {ex!r}")
-    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_jevdesk, check_jevdesk_grads, check_jev_budget, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
+    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_jevdesk, check_jevdesk_grads, check_jevmajors, check_jev_budget, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
         try:
             fn()
         except Exception as ex:
