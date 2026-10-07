@@ -705,7 +705,7 @@ def check_jevmajors():
         alert("jevmajors-errors", f"Jev Majors: {hb['errors_last_hour']} errors in the last hour", "See ~/jev-majors/data/errors.jsonl and main.err.log.", every_hours=3)
     nw = jload(os.path.join(base, "data", "news.json"), None)
     if nw and nw.get("feeds") and time.time() - nw.get("t", 0) < 3600 and all(v <= 0 for v in nw["feeds"].values()):
-        alert("jevmajors-news", "Jev Majors news feeds all failing", "Cointelegraph, Decrypt and The Block RSS all returned nothing; the news veto is off (entries still run). See ~/jev-majors/data/errors.jsonl.", every_hours=12)
+        alert("jevmajors-news", "Jev Majors news feeds all failing", "all four RSS feeds returned nothing; the news veto is off (entries still run). See ~/jev-majors/data/errors.jsonl.", every_hours=12)
     sat = [p for p in hb.get("positions", []) if not p.get("shadow")]
     note("jev majors", "warn" if hb.get("breaker") else "ok", f"{hb.get('mode')}; {len(hb.get('positions', []))} position(s) ({len(sat)} live); last scan {int((time.time() - (hb.get('last_scan') or 0)) / 60)}m ago")
 
