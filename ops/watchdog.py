@@ -819,6 +819,8 @@ def check_perplab():
     base = os.path.join(HOME, "market-lab", "perp-lab"); marker = os.path.join(base, "results", "last-email.txt")
     if not os.path.isdir(base):
         return note("perp setups email", "warn", "perp-lab missing")
+    if os.path.exists(os.path.join(base, "PAUSED.md")):
+        return note("perp setups email", "ok", "paused (protocol runs inside Jev Majors)")
     now = dt.datetime.now()
     if now.hour * 60 + now.minute < 9 * 60 + 30:
         return note("perp setups email", "ok", "not due yet")
