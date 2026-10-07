@@ -374,12 +374,14 @@ VENVS = {   # name: (python, extra env the LaunchAgents set)
                   {"DYLD_FALLBACK_LIBRARY_PATH": os.path.join(HOME, ".venvs/market-ml/lib/python3.11/site-packages/torch/lib")}),
     "jev-desk": (os.path.join(HOME, "jev-desk", ".venv", "bin", "python"), {}),
     "jev-majors": (os.path.join(HOME, "jev-majors", ".venv", "bin", "python"), {}),
+    "jev-markets": (os.path.join(HOME, "jev-markets", ".venv", "bin", "python"), {}),
 }
 PINS = {    # symlink: exact target it must resolve to
     os.path.join(HOME, ".local", "bin", "node"): os.path.join(HOME, ".local/opt/node-v22.22.3/bin/node"),
     os.path.join(HOME, ".venvs", "market-ml", "bin", "python"): os.path.join(HOME, ".local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3.11"),
     os.path.join(HOME, "jev-desk", ".venv", "bin", "python"): os.path.join(HOME, ".local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3.11"),
     os.path.join(HOME, "jev-majors", ".venv", "bin", "python"): os.path.join(HOME, ".local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3.11"),
+    os.path.join(HOME, "jev-markets", ".venv", "bin", "python"): os.path.join(HOME, ".local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3.11"),
 }
 KEEPALIVE_OK = {-15, -9}   # a long-running agent restarted by launchd reports its predecessor's signal
 
@@ -459,7 +461,7 @@ def check_platform():
         note("platform", "ok", f"pins intact, imports {'match baseline' if imports_due else 'checked daily'}, {free_gb:.0f} GB free")
 
 
-REPOS = ["asset-agents", "coin-launch-agent", "flip-notifier", "flux-lab", "jev-client", "jev-desk", "jev-majors", "kalshi-btc-agent", "kalshi-btc-1h-agent", "kalshi-commodity-agent",
+REPOS = ["asset-agents", "coin-launch-agent", "flip-notifier", "flux-lab", "jev-client", "jev-desk", "jev-majors", "jev-markets", "kalshi-btc-agent", "kalshi-btc-1h-agent", "kalshi-commodity-agent",
          "market-iv-agent", "market-lab", "portfolio-agent", "trade-core", "zillow-agent"]
 GIT = "/usr/local/bin/git"   # absolute: /usr/bin/git is the CLT stub and pops an install dialog
 
@@ -705,6 +707,47 @@ def check_jevmajors():
     note("jev majors", "warn" if hb.get("breaker") else "ok", f"{hb.get('mode')}; {len(hb.get('positions', []))} position(s) ({len(sat)} live); last scan {int((time.time() - (hb.get('last_scan') or 0)) / 60)}m ago")
 
 
+def check_jevmarkets():
+    """Jev Markets (~/jev-markets): US stocks + ETFs + futures paper desk. Jobs loaded, heartbeat and live data fresh, the daily
+    screen current on trading days, no breaker, errors low. Repair = kickstart. Entirely separate from jevdesk and jevmajors."""
+    base = os.path.join(HOME, "jev-markets")
+    if not os.path.isdir(base):
+        return
+    for label in ("com.dhruv.jevmarkets.main", "com.dhruv.jevmarkets.dashboard"):
+        if not job(label)["loaded"]:
+            kick(label)
+            alert("jevmarkets-unloaded", "Jev Markets job was not loaded", f"{label} was not loaded in launchd; the watchdog tried to load it.", every_hours=6)
+            return note("jev markets", "fail", f"{label.split('.')[-1]} was unloaded; reloaded")
+    hb = jload(os.path.join(base, "data", "heartbeat.json"), None)
+    age = time.time() - hb["t"] if hb else None
+    if age is None or age > 10 * 60:
+        if attempt("jevmarkets-kick", 4):
+            kick("com.dhruv.jevmarkets.main")
+        alert("jevmarkets-stale", "Jev Markets loop not ticking", f"~/jev-markets/data/heartbeat.json is {'missing' if age is None else f'{int(age // 60)} min old'}. Kickstarted; see ~/jev-markets/main.err.log.", every_hours=3)
+        return note("jev markets", "fail", "heartbeat stale; kicked")
+    if hb.get("offline"):
+        return note("jev markets", "warn", "Mac offline: entries paused")
+    if time.time() - (hb.get("scan_thread_at") or time.time()) > 15 * 60:
+        if attempt("jevmarkets-scan-kick", 4):
+            kick("com.dhruv.jevmarkets.main")
+        alert("jevmarkets-scanthread", "Jev Markets scan thread hung", "No scan-loop pass for 15+ min; kickstarted.", every_hours=3)
+        return note("jev markets", "fail", "scan thread silent; kicked")
+    live = jload(os.path.join(base, "data", "live.json"), {})
+    if time.time() - live.get("t", 0) > 240:
+        return note("jev markets", "fail", "price snapshot stale: the Alpaca/Yahoo feed is not updating")
+    daily = jload(os.path.join(base, "data", "daily.json"), None)
+    if daily is not None and marketday.is_trading_day(TODAY) and after("07:30") and time.time() - daily["t"] > 26 * 3600:
+        if attempt("jevmarkets-screen", 2):
+            kick("com.dhruv.jevmarkets.screen")
+        alert("jevmarkets-screen", "Jev Markets daily screen is stale", "data/daily.json is over 26 h old on a trading day; the watchdog re-ran com.dhruv.jevmarkets.screen.", every_hours=6)
+        return note("jev markets", "warn", "daily screen stale; re-run")
+    if hb.get("breaker"):
+        alert("jevmarkets-breaker", "Jev Markets circuit breaker tripped", "Drawdown limit hit; no new trades. Resume: cd ~/jev-markets && .venv/bin/python main.py reset-breaker", every_hours=12)
+    if (hb.get("errors_last_hour") or 0) >= 20:
+        alert("jevmarkets-errors", f"Jev Markets: {hb['errors_last_hour']} errors in the last hour", "See ~/jev-markets/data/errors.jsonl and main.err.log.", every_hours=3)
+    note("jev markets", "warn" if hb.get("breaker") else "ok", f"paper; {len(hb.get('positions', []))} position(s); session {hb.get('session')}; universe {(daily or {}).get('n_universe')}")
+
+
 def check_jev_budget():
     """Jev (TypeSafe) spend this calendar month across every agent vs ~/jev-client/budget.json.
     The clients themselves refuse calls past the cap; this emails at 80% and when it is hit."""
@@ -912,7 +955,7 @@ def main():
         check_flip(trading)
     except Exception as ex:
         note("flip notifier", "fail", f"watchdog error {ex!r}")
-    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_jevdesk, check_jevdesk_grads, check_jevmajors, check_jev_budget, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
+    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_jevdesk, check_jevdesk_grads, check_jevmajors, check_jevmarkets, check_jev_budget, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
         try:
             fn()
         except Exception as ex:

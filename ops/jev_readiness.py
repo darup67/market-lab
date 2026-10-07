@@ -7,14 +7,17 @@ import json, os, sqlite3, statistics, time
 HOME = os.path.expanduser("~")
 GATES = {"days": 21, "trades": 20, "profit_factor": 1.3, "max_drawdown": 0.15}
 DESKS = [("Jev desk (memecoins, spot)", f"{HOME}/jev-desk/data/desk.db", "ticker", "ticket_usd"),
-         ("Jev Majors (perps)", f"{HOME}/jev-majors/data/desk.db", "coin", "margin_usd")]
+         ("Jev Majors (perps)", f"{HOME}/jev-majors/data/desk.db", "coin", "margin_usd"),
+         ("Jev Markets (US stocks, ETFs, futures)", f"{HOME}/jev-markets/data/desk.db", "symbol", "risk_usd")]
 
 
 def load(path, name_col, stake_col):
     db = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5)
     kv = lambda k: (lambda r: json.loads(r[0]) if r else None)(db.execute("SELECT v FROM kv WHERE k=?", (k,)).fetchone())
     epoch, start = kv("paper_epoch") or 0, kv("paper_start_bank") or 1000
-    rows = db.execute(f"SELECT created, {name_col}, {stake_col}, pnl_usd, updated FROM orders WHERE status='shadow_closed' AND shadow=1 AND created>=? ORDER BY updated", (epoch,)).fetchall()
+    cols = [c[1] for c in db.execute("PRAGMA table_info(orders)")]
+    cond = "status='closed'" if "shadow" not in cols else "status='shadow_closed' AND shadow=1"      # jev-markets has no shadow column
+    rows = db.execute(f"SELECT created, {name_col}, {stake_col}, pnl_usd, updated FROM orders WHERE {cond} AND created>=? ORDER BY updated", (epoch,)).fetchall()
     return epoch, start, rows
 
 
