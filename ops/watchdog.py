@@ -726,6 +726,9 @@ def check_jevmarkets():
         if t.get("type") == "exit" and t.get("status") == "pending" and time.time() - t["created"] > 3 * 60:
             alert("jevmarkets-exit-ticket", f"Jev Markets EXIT ticket unplaced: {t['action']} {t['qty']} {t['symbol']}",
                   f"A live position still needs closing at Robinhood ({t.get('reason', '')[:80]}). Run: cd ~/jev-markets && .venv/bin/python main.py tickets", every_hours=0.25)
+    fp = jload(os.path.join(base, "data", "fut_patterns.json"), None)
+    if fp and NOW.weekday() < 5 and time.time() - fp.get("updated", 0) > 50 * 3600:
+        alert("jevmarkets-futpat", "Jev Markets futures pattern research is stale", "data/fut_patterns.json is over 50 h old; the 17:20 ET job com.dhruv.jevmarkets.futpat may be failing. See ~/jev-markets/futpat.err.log. Run: cd ~/jev-markets && .venv/bin/python futpat.py refresh", every_hours=24)
     hb = jload(os.path.join(base, "data", "heartbeat.json"), None)
     age = time.time() - hb["t"] if hb else None
     if age is None or age > 10 * 60:
