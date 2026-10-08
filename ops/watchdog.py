@@ -788,6 +788,8 @@ def check_kalshi_commodity():
     base = os.path.join(HOME, "kalshi-commodity-agent")
     if not os.path.isdir(base):
         return note("kalshi commodity", "warn", "repo missing")
+    if os.path.exists(os.path.join(base, "PAUSED.md")):
+        return note("kalshi commodity", "ok", "paused (PAUSED.md)")
     label = "com.dhruv.kalshicommodity"
     if not job(label)["loaded"]:
         kick(label)
@@ -852,6 +854,8 @@ def check_kalshi_btc_1h():
     base = os.path.join(HOME, "kalshi-btc-1h-agent")
     if not os.path.isdir(base):
         return note("kalshi btc 1h", "warn", "repo missing")
+    if os.path.exists(os.path.join(base, "PAUSED.md")):
+        return note("kalshi btc 1h", "ok", "paused (PAUSED.md)")
     label = "com.dhruv.kalshibtc1h"
     if not job(label)["loaded"]:
         kick(label)
