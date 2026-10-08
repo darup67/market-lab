@@ -713,6 +713,43 @@ def check_jevmajors():
     note("jev majors", "warn" if hb.get("breaker") else "ok", f"{hb.get('mode')}; {len(hb.get('positions', []))} position(s) ({len(sat)} live); last scan {int((time.time() - (hb.get('last_scan') or 0)) / 60)}m ago")
 
 
+def check_phone_access():
+    """Phone access: the Mac must not idle-sleep (it carries Remote Control for the Claude app) and the three Jev dashboards must answer on
+    localhost and on the Tailscale address (a 401 means up + password enforced). Repair = kickstart a dead dashboard; sleep and Tailscale only alert."""
+    import urllib.request, urllib.error
+    pm = subprocess.run(["pmset", "-g"], capture_output=True, text=True).stdout
+    never = any(l.split()[:2] == ["sleep", "0"] for l in pm.splitlines()) or any(l.split()[:2] == ["SleepDisabled", "1"] for l in pm.splitlines())
+    if not never:
+        alert("phone-sleep", "Mac can idle-sleep: phone access and Remote Control will drop",
+              "pmset shows system sleep is on and SleepDisabled is 0. Fix: sudo pmset -a sleep 0 (or keep Amphetamine running). Keep the lid open and the Mac plugged in.", every_hours=6)
+        note("phone access", "warn", "Mac can idle-sleep")
+    ts = subprocess.run(["ifconfig"], capture_output=True, text=True).stdout
+    ts_ip = "100.101.160.85" if "100.101.160.85" in ts else None
+    if not ts_ip:
+        alert("phone-tailscale", "Tailscale is down on the Mac", "No 100.101.160.85 interface. Open Tailscale on the Mac and sign in; the phone cannot reach the Jev dashboards until it is up.", every_hours=3)
+        note("phone access", "warn", "Tailscale interface missing")
+
+    def code(url):
+        try:
+            return urllib.request.urlopen(url, timeout=6).status
+        except urllib.error.HTTPError as e:
+            return e.code
+        except Exception:
+            return None
+    bad = []
+    for name, port in (("jevdesk", 8788), ("jevmajors", 8789), ("jevmarkets", 8790)):
+        if code(f"http://127.0.0.1:{port}/api") is None:
+            kick(f"com.dhruv.{name}.dashboard")
+            bad.append(f"{name} (:{port}) not answering on localhost; kickstarted")
+        elif ts_ip and code(f"http://{ts_ip}:{port}/api") != 401:
+            bad.append(f"{name} (:{port}) not reachable with a password on {ts_ip}: password missing (dashboard stays localhost-only) or Tailscale blocked")
+    if bad:
+        alert("phone-dashboards", "Jev dashboards not reachable from the phone", "\n".join(bad), every_hours=3)
+        return note("phone access", "fail", "; ".join(bad))
+    if never and ts_ip:
+        note("phone access", "ok", "Mac awake, Tailscale up, 3 dashboards reachable + password-gated")
+
+
 def check_jevmarkets():
     """Jev Markets (~/jev-markets): US stocks + ETFs + futures paper desk. Jobs loaded, heartbeat and live data fresh, the daily
     screen current on trading days, no breaker, errors low. Repair = kickstart. Entirely separate from jevdesk and jevmajors."""
@@ -975,7 +1012,7 @@ def main():
         check_flip(trading)
     except Exception as ex:
         note("flip notifier", "fail", f"watchdog error {ex!r}")
-    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_jevdesk, check_jevdesk_grads, check_jevmajors, check_jevmarkets, check_jev_budget, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
+    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_jevdesk, check_jevdesk_grads, check_jevmajors, check_jevmarkets, check_phone_access, check_jev_budget, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
         try:
             fn()
         except Exception as ex:
