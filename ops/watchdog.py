@@ -817,8 +817,26 @@ def check_jev_budget():
         alert("jev-budget-80", f"Jev spend at {pct:.0f}% of the monthly budget",
               f"${spent:.2f} of ${cap:.2f} this month. Calls stop at the cap.\n\npython3 ~/jev-client/jev.py --usage shows the spend by agent.",
               every_hours=24)
+    elif pct >= 50:
+        note("jev budget", "warn", f"${spent:.2f} of ${cap:.2f} ({pct:.0f}%)")
+        alert("jev-budget-50", f"Jev spend at {pct:.0f}% of the monthly budget",
+              f"${spent:.2f} of ${cap:.2f} this month. Calls stop at the cap.\n\npython3 ~/jev-client/jev.py --usage shows the spend by agent.", every_hours=48)
     else:
         note("jev budget", "ok", f"${spent:.4f} of ${cap:.2f} this month ({pct:.2f}%)")
+    # per-agent daily guard: one agent spending a big share of the whole month's budget in a single day is a runaway loop
+    try:
+        today, by = time.strftime("%Y-%m-%d"), {}
+        for line in open(os.path.join(HOME, "jev-client", "calls.jsonl")):
+            r = json.loads(line)
+            if r.get("in") and time.strftime("%Y-%m-%d", time.localtime(r["t"])) == today:
+                by[r["caller"]] = by.get(r["caller"], 0) + r["in"] / 1e6 * jev.USD_PER_MTOK
+        big = {k: v for k, v in by.items() if v > 0.04 * cap}                # over 4% of the month's cap in one day (~$1 at $25)
+        if big:
+            alert("jev-agent-day", "A Jev agent spent a lot today", "Spend today: " + ", ".join(f"{k} ${v:.2f}" for k, v in sorted(by.items(), key=lambda x: -x[1])) +
+                  f"\n\nAn agent over ${0.04 * cap:.2f} in a day (4% of the monthly cap) usually means a loop. Check python3 ~/jev-client/jev.py --usage.", every_hours=12)
+            note("jev budget", "warn", "agent spend today: " + ", ".join(f"{k} ${v:.2f}" for k, v in big.items()))
+    except Exception:
+        pass
 
 
 def check_kalshi_commodity():
