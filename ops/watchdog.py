@@ -681,6 +681,9 @@ def check_jevmajors():
             kick(label)
             alert("jevmajors-unloaded", "Jev Majors job was not loaded", f"{label} was not loaded in launchd; the watchdog tried to load it.", every_hours=6)
             return note("jev majors", "fail", f"{label.split('.')[-1]} was unloaded; reloaded")
+    mp = jload(os.path.join(base, "data", "majpat.json"), None)
+    if mp and time.time() - mp.get("updated", 0) > 50 * 3600:
+        alert("jevmajors-lab", "Jev Majors research job is stale", "data/majpat.json is over 50 h old; the 06:50 job com.dhruv.jevmajors.lab may be failing. See ~/jev-majors/lab.err.log. Run: cd ~/jev-majors && ./run_lab.sh", every_hours=24)
     hb = jload(os.path.join(base, "data", "heartbeat.json"), None)
     age = time.time() - hb["t"] if hb else None
     if age is None or age > 10 * 60:
