@@ -13,8 +13,8 @@ import json, math, os, random, sqlite3, statistics as st, subprocess, sys, time
 HOME = os.path.expanduser("~")
 CFG = json.load(open(os.path.join(HOME, "market-lab", "ops", "data", "ab_config.json")))
 T0 = CFG["T0"]
-DESKS = {"markets": {"A": f"{HOME}/jev-markets-guarded", "B": f"{HOME}/jev-markets", "sym": "symbol", "risk": "risk_usd", "unit": "R", "key": "r", "bank": 50000.0, "status": "closed", "repo": f"{HOME}/jev-markets"},
-         "majors": {"A": f"{HOME}/jev-majors-guarded", "B": f"{HOME}/jev-majors", "sym": "coin", "risk": "margin_usd", "unit": "ROE", "key": "roe", "bank": 1000.0, "status": "shadow_closed", "repo": f"{HOME}/jev-majors"}}
+DESKS = {"markets": {"A": f"{HOME}/jev-markets-guarded", "B": f"{HOME}/jev-markets", "sym": "symbol", "risk": "risk_usd", "unit": "R", "key": "r", "bank": 30000.0, "status": "closed", "repo": f"{HOME}/jev-markets"},
+         "majors": {"A": f"{HOME}/jev-majors-guarded", "B": f"{HOME}/jev-majors", "sym": "coin", "risk": "margin_usd", "unit": "ROE", "key": "roe", "bank": 5000.0, "status": "shadow_closed", "repo": f"{HOME}/jev-majors"}}
 
 
 def trades(desk, arm):
