@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.dhruv.recap</string>
+  <key>ProgramArguments</key><array><string>/Users/dhruvpatel/jev-markets/.venv/bin/python</string><string>/Users/dhruvpatel/market-lab/ops/recap.py</string></array>
+  <key>WorkingDirectory</key><string>/Users/dhruvpatel/market-lab/ops</string>
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>17</integer><key>Minute</key><integer>50</integer></dict>
+  <key>StandardOutPath</key><string>/Users/dhruvpatel/market-lab/ops/recap.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/dhruvpatel/market-lab/ops/recap.err.log</string>
+</dict></plist>
