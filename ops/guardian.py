@@ -106,6 +106,9 @@ def apply(desk, bad, allg, days, label, dry):
     return g, changes
 
 
+ACTIVE = {"jev-desk": True, "jev-majors": False, "jev-markets": False}      # user 2026-10-09: the guardian stays on the Jev desk only; its pauses are cleared on the others
+
+
 def main():
     dry, status = "--dry" in sys.argv, "--status" in sys.argv
     if "--clear" in sys.argv:
@@ -120,6 +123,11 @@ def main():
         return
     out, lines = [], []
     for desk, fn, days, label in (("jev-desk", desk_lanes, 7, "lane losing"), ("jev-majors", majors_coins, 7, "coin+side losing"), ("jev-markets", markets_segments, 3, "segment losing")):
+        if not ACTIVE.get(desk, True):
+            if not dry and load(desk).get("paused"):
+                save(desk, {"paused": {}, "checked": time.time()})
+            lines.append(f"{desk}: guardian switched off by the user (no pauses)")
+            continue
         try:
             bad, allg = fn()
             g, ch = apply(desk, bad, allg, days, label, dry)
