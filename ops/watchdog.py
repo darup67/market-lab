@@ -713,6 +713,26 @@ def check_jevmajors():
     note("jev majors", "warn" if hb.get("breaker") else "ok", f"{hb.get('mode')}; {len(hb.get('positions', []))} position(s) ({len(sat)} live); last scan {int((time.time() - (hb.get('last_scan') or 0)) / 60)}m ago")
 
 
+def check_ab():
+    """A/B guardrail test (ops/ab_report.py): record both arms hourly into each repo's export/ store, and make sure the guarded copies are alive."""
+    cfgp = os.path.join(DATA, "ab_config.json")
+    if not os.path.exists(cfgp):
+        return
+    last = os.path.getmtime(os.path.join(HOME, "jev-markets", "export", "ab_summary.json")) if os.path.exists(os.path.join(HOME, "jev-markets", "export", "ab_summary.json")) else 0
+    if time.time() - last > 55 * 60 and not DRY:
+        subprocess.run([sys.executable, os.path.join(HERE, "ab_report.py")], capture_output=True, timeout=300)
+    dead = []
+    for d in ("jev-markets-guarded", "jev-majors-guarded"):
+        hb = jload(os.path.join(HOME, d, "data", "heartbeat.json"), None)
+        if not hb or time.time() - hb.get("t", 0) > 600:
+            dead.append(d)
+            kick("com.dhruv.jevmarkets.guarded" if "markets" in d else "com.dhruv.jevmajors.guarded")
+    if dead:
+        alert("ab-dead", "A/B test: a guarded copy is not running", ", ".join(dead) + " heartbeat is stale; kickstarted.", every_hours=3)
+        return note("ab test", "fail", "guarded copy down: " + ", ".join(dead))
+    note("ab test", "ok", "both arms running; results in each repo's export/ab_summary.json")
+
+
 def check_phone_access():
     """Phone access: the Mac must not idle-sleep (it carries Remote Control for the Claude app) and the three Jev dashboards must answer on
     localhost and on the Tailscale address (a 401 means up + password enforced). Repair = kickstart a dead dashboard; sleep and Tailscale only alert."""
@@ -1030,7 +1050,7 @@ def main():
         check_flip(trading)
     except Exception as ex:
         note("flip notifier", "fail", f"watchdog error {ex!r}")
-    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_jevdesk, check_jevdesk_grads, check_jevmajors, check_jevmarkets, check_phone_access, check_jev_budget, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
+    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_jevdesk, check_jevdesk_grads, check_jevmajors, check_jevmarkets, check_ab, check_phone_access, check_jev_budget, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
         try:
             fn()
         except Exception as ex:
