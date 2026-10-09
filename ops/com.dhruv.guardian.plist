@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.dhruv.guardian</string>
+  <key>ProgramArguments</key><array><string>/usr/bin/python3</string><string>/Users/dhruvpatel/market-lab/ops/guardian.py</string></array>
+  <key>WorkingDirectory</key><string>/Users/dhruvpatel/market-lab/ops</string>
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>17</integer><key>Minute</key><integer>45</integer></dict>
+  <key>StandardOutPath</key><string>/Users/dhruvpatel/market-lab/ops/guardian.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/dhruvpatel/market-lab/ops/guardian.err.log</string>
+</dict></plist>
