@@ -737,11 +737,11 @@ def check_phone_access():
         except Exception:
             return None
     bad = []
-    for name, port in (("jevdesk", 8788), ("jevmajors", 8789), ("jevmarkets", 8790)):
-        if code(f"http://127.0.0.1:{port}/api") is None:
-            kick(f"com.dhruv.{name}.dashboard")
+    for name, port in (("jevdesk", 8788), ("jevmajors", 8789), ("jevmarkets", 8790), ("overview", 8791)):
+        if code(f"http://127.0.0.1:{port}/" + ("data" if name == "overview" else "api")) is None:
+            kick("com.dhruv.overview" if name == "overview" else f"com.dhruv.{name}.dashboard")
             bad.append(f"{name} (:{port}) not answering on localhost; kickstarted")
-        elif ts_ip and code(f"http://{ts_ip}:{port}/api") != 401:
+        elif ts_ip and code(f"http://{ts_ip}:{port}/" + ("data" if name == "overview" else "api")) != 401:
             bad.append(f"{name} (:{port}) not reachable with a password on {ts_ip}: password missing (dashboard stays localhost-only) or Tailscale blocked")
     if bad:
         alert("phone-dashboards", "Jev dashboards not reachable from the phone", "\n".join(bad), every_hours=3)
