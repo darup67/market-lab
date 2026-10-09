@@ -12,7 +12,7 @@ segment gets re-tested instead of being banned for ever. It writes data/guardian
 Rules (all need real sample sizes; none fires on a handful of trades):
   Jev desk     a LANE (gated, swing, explore, pregrad, pregrad:explore, pattern) with >= 12 closed paper trades in the last 14 days, mean return <= -4%, t <= -1.0
   Jev Majors   a COIN:SIDE with >= 8 closed paper trades in the last 30 days, mean ROE <= -5%, t <= -1.5
-  Jev Markets  a SEGMENT (mode, trigger, 3-hour block) with >= 25 closed MNQ trades in the last 14 days, profit factor < 0.8, net negative, t <= -1.5"""
+  Jev Markets  a SEGMENT (mode, trigger, 3-hour block, or contract) with >= 25 closed MNQ trades in the last 14 days, profit factor < 0.8, net negative, t <= -1.5"""
 import datetime as dt, json, math, os, sqlite3, statistics as st, sys, time
 
 HOME = os.path.expanduser("~")
@@ -70,16 +70,16 @@ def majors_coins():
 def markets_segments():
     since = time.time() - 14 * 86400
     rows = []
-    for body, close, pnl, upd, created in db("jev-markets").execute("SELECT body, close, pnl_usd, updated, created FROM orders WHERE status='closed' AND symbol='NQ'"):
+    for symbol, body, close, pnl, upd, created in db("jev-markets").execute("SELECT symbol, body, close, pnl_usd, updated, created FROM orders WHERE status='closed' AND kind='future'"):
         if (upd or 0) < since:
             continue
         b, c = json.loads(body or "{}"), json.loads(close or "{}")
         if c.get("r") is None:
             continue
-        rows.append({"mode": b.get("scalp_mode") or "rth", "trigger": b.get("trigger") or "?", "hour": dt.datetime.fromtimestamp(created).hour // 3 * 3, "pnl": pnl or 0.0, "r": c["r"]})
+        rows.append({"symbol": symbol, "mode": b.get("scalp_mode") or "rth", "trigger": b.get("trigger") or "?", "hour": dt.datetime.fromtimestamp(created).hour // 3 * 3, "pnl": pnl or 0.0, "r": c["r"]})
     seg = {}
     for r in rows:
-        for key in (f"mode:{r['mode']}", f"trigger:{r['trigger']}", f"hours:{r['hour']:02d}"):
+        for key in (f"mode:{r['mode']}", f"trigger:{r['trigger']}", f"hours:{r['hour']:02d}", f"symbol:{r['symbol']}"):
             seg.setdefault(key, []).append(r)
     bad = {}
     for k, v in seg.items():
