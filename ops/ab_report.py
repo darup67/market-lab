@@ -14,7 +14,8 @@ HOME = os.path.expanduser("~")
 CFG = json.load(open(os.path.join(HOME, "market-lab", "ops", "data", "ab_config.json")))
 T0 = CFG["T0"]
 DESKS = {"markets": {"A": f"{HOME}/jev-markets-guarded", "B": f"{HOME}/jev-markets", "sym": "symbol", "risk": "risk_usd", "unit": "R", "key": "r", "bank": 30000.0, "status": "closed", "repo": f"{HOME}/jev-markets"},
-         "majors": {"A": f"{HOME}/jev-majors-guarded", "B": f"{HOME}/jev-majors", "sym": "coin", "risk": "margin_usd", "unit": "ROE", "key": "roe", "bank": 5000.0, "status": "shadow_closed", "repo": f"{HOME}/jev-majors"}}
+         "majors": {"A": f"{HOME}/jev-majors", "B": f"{HOME}/jev-majors-guarded", "sym": "coin", "risk": "margin_usd", "unit": "ROE", "key": "roe", "bank": 10000.0, "status": "shadow_closed", "repo": f"{HOME}/jev-majors",
+                    "labels": ("follows Jev", "opposite of Jev"), "pairs": True}}
 
 
 def trades(desk, arm):
@@ -60,13 +61,46 @@ def compare(a_rows, b_rows, desk):
     diffs = sorted(st.mean(random.choices(b, k=len(b))) - st.mean(random.choices(a, k=len(a))) for _ in range(3000))
     lo, hi = diffs[int(0.05 * len(diffs))], diffs[int(0.95 * len(diffs))]
     d = st.mean(b) - st.mean(a)
-    v = ("B (unfiltered) is ahead and the 90% interval clears zero" if lo > 0 else "A (guarded) is ahead and the 90% interval clears zero" if hi < 0 else "no clear difference: the 90% interval for B minus A includes zero")
+    la, lb = DESKS[desk].get("labels", ("guarded", "unfiltered"))
+    v = (f"B ({lb}) is ahead and the 90% interval clears zero" if lo > 0 else f"A ({la}) is ahead and the 90% interval clears zero" if hi < 0 else "no clear difference: the 90% interval for B minus A includes zero")
     return {"mean_diff_B_minus_A": round(d, 4), "interval_90": [round(lo, 4), round(hi, 4)], "unit": DESKS[desk]["unit"], "verdict": v, "n_a": len(a), "n_b": len(b)}
+
+
+def pairs(desk, a_rows, b_rows):
+    """Majors invert test: pair every Jev-following trade (A) with the opposite trade B opened from it (B's order body carries mirror_of = A's order id). Returns summary stats; the rows go to export/ab_pairs.jsonl."""
+    spec = DESKS[desk]
+    db = sqlite3.connect(f"file:{spec['B']}/data/desk.db?mode=ro", uri=True, timeout=10)
+    link = {}
+    for oid, body in db.execute("SELECT id, body FROM orders WHERE shadow=1"):
+        try:
+            b = json.loads(body)
+            b = b.get("order") if isinstance(b.get("order"), dict) else b
+        except ValueError:
+            continue
+        if b.get("mirror_of"):
+            link[b["mirror_of"]] = oid
+    bmap = {r["id"]: r for r in b_rows}
+    rows = []
+    for ar in a_rows:
+        bid = link.get(ar["id"])
+        br = bmap.get(bid)
+        if br:
+            rows.append({"a_id": ar["id"], "b_id": bid, "symbol": ar["symbol"], "a_side": ar["side"], "b_side": br["side"], "a_pnl": ar["pnl_usd"], "b_pnl": br["pnl_usd"], "a_roe": ar.get("roe"), "b_roe": br.get("roe"),
+                         "a_rule": ar["rule"], "b_rule": br["rule"], "a_opened": ar["opened"], "b_opened": br["opened"]})
+    n = len(rows)
+    both_win = sum(1 for r in rows if r["a_pnl"] > 0 and r["b_pnl"] > 0)
+    both_lose = sum(1 for r in rows if r["a_pnl"] <= 0 and r["b_pnl"] <= 0)
+    return {"paired_closed": n, "a_wins_b_loses": sum(1 for r in rows if r["a_pnl"] > 0 >= r["b_pnl"]), "b_wins_a_loses": sum(1 for r in rows if r["b_pnl"] > 0 >= r["a_pnl"]), "both_win": both_win, "both_lose": both_lose,
+            "a_net_usd": round(sum(r["a_pnl"] for r in rows), 2), "b_net_usd": round(sum(r["b_pnl"] for r in rows), 2), "rows": rows}
 
 
 def record(desk, print_only=False):
     a, b = trades(desk, "A"), trades(desk, "B")
-    out = {"desk": desk, "updated": time.strftime("%Y-%m-%d %H:%M:%S"), "T0": CFG["T0"], "started": CFG["started_et"], "A_guarded": metrics(a, desk), "B_unfiltered": metrics(b, desk), "comparison": compare(a, b, desk)}
+    la, lb = DESKS[desk].get("labels", ("guarded", "unfiltered"))
+    t0 = CFG.get("T0_" + desk, CFG["T0"])
+    out = {"desk": desk, "updated": time.strftime("%Y-%m-%d %H:%M:%S"), "T0": t0, "started": CFG.get("started_" + desk, CFG["started_et"]), "A_label": la, "B_label": lb, "A_guarded": metrics(a, desk), "B_unfiltered": metrics(b, desk), "comparison": compare(a, b, desk)}
+    if DESKS[desk].get("pairs"):
+        out["pairs"] = pairs(desk, a, b)
     if print_only:
         return out
     repo = DESKS[desk]["repo"]
@@ -74,12 +108,16 @@ def record(desk, print_only=False):
     os.makedirs(ex, exist_ok=True)
     json.dump({**CFG, "desk": desk}, open(os.path.join(ex, "ab_config.json"), "w"), indent=1, sort_keys=True)
     json.dump(out, open(os.path.join(ex, "ab_summary.json"), "w"), indent=1, sort_keys=True)
+    if out.get("pairs"):
+        with open(os.path.join(ex, "ab_pairs.jsonl"), "w") as f:
+            for r in out["pairs"].pop("rows"):
+                f.write(json.dumps(r, sort_keys=True) + "\n")
     with open(os.path.join(ex, "ab_trades.jsonl"), "w") as f:
         for r in sorted(a + b, key=lambda r: (r["arm"], r["id"])):
             f.write(json.dumps(r, sort_keys=True) + "\n")
     env = {**os.environ, "PATH": "/usr/local/bin:" + os.environ.get("PATH", "/usr/bin:/bin")}
     git = ["git", "-C", repo]
-    subprocess.run(git + ["add", "export/ab_config.json", "export/ab_summary.json", "export/ab_trades.jsonl"], capture_output=True, env=env)
+    subprocess.run(git + ["add", "export/ab_config.json", "export/ab_summary.json", "export/ab_trades.jsonl"] + (["export/ab_pairs.jsonl"] if out.get("pairs") is not None else []), capture_output=True, env=env)
     r = subprocess.run(git + ["commit", "-qm", f"export: A/B guardrails test ({len(a)} guarded / {len(b)} unfiltered closed trades)", "--author", f"{os.path.basename(repo)} <{os.path.basename(repo)}@localhost>"], capture_output=True, text=True, env=env)
     if r.returncode == 0:
         subprocess.run(git + ["push", "-q"], capture_output=True, text=True, timeout=120, env=env)
@@ -87,10 +125,10 @@ def record(desk, print_only=False):
 
 
 def show(o):
-    print(f"\n{o['desk'].upper()}  A (guarded) vs B (unfiltered), since {o['started']}   updated {o['updated']}")
+    print(f"\n{o['desk'].upper()}  A ({o.get('A_label', 'guarded')}) vs B ({o.get('B_label', 'unfiltered')}), since {o['started']}   updated {o['updated']}")
     keys = ["n", "win_rate", "net_usd", "return_pct", "profit_factor", "payoff_ratio", "avg_win_usd", "avg_loss_usd", "expectancy_usd", "max_drawdown_usd", "worst_trade_usd", "trades_per_day"]
     A, B = o["A_guarded"], o["B_unfiltered"]
-    print(f"  {'':18s}{'A guarded':>14s}{'B unfiltered':>14s}")
+    print(f"  {'':18s}{'A':>14s}{'B':>14s}")
     for k in keys:
         print(f"  {k:18s}{str(A.get(k)):>14s}{str(B.get(k)):>14s}")
     print("  ->", o["comparison"]["verdict"], (o["comparison"].get("interval_90") or ""))
