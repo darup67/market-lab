@@ -15,14 +15,14 @@ CFG = json.load(open(os.path.join(HOME, "market-lab", "ops", "data", "ab_config.
 T0 = CFG["T0"]
 DESKS = {"markets": {"A": f"{HOME}/jev-markets-guarded", "B": f"{HOME}/jev-markets", "sym": "symbol", "risk": "risk_usd", "unit": "R", "key": "r", "bank": 30000.0, "status": "closed", "repo": f"{HOME}/jev-markets"},
          "majors": {"A": f"{HOME}/jev-majors-guarded", "B": f"{HOME}/jev-majors", "sym": "coin", "risk": "margin_usd", "unit": "ROE", "key": "roe", "bank": 10000.0, "status": "shadow_closed", "repo": f"{HOME}/jev-majors",
-                    "labels": ("Jev baseline", "Jev + positioning data")}}
+                    "labels": ("Jev baseline", "Jev + positioning data"), "C": f"{HOME}/jev-majors-invert"}}
 
 
-def trades(desk, arm):
+def trades(desk, arm, t0=None):
     spec = DESKS[desk]
     db = sqlite3.connect(f"file:{spec[arm]}/data/desk.db?mode=ro", uri=True, timeout=10)
     out = []
-    for oid, created, sym, side, pnl, close, upd in db.execute(f"SELECT id, created, {spec['sym']}, side, pnl_usd, close, updated FROM orders WHERE status=? AND created>=? ORDER BY updated", (spec["status"], T0)):
+    for oid, created, sym, side, pnl, close, upd in db.execute(f"SELECT id, created, {spec['sym']}, side, pnl_usd, close, updated FROM orders WHERE status=? AND created>=? ORDER BY updated", (spec["status"], T0 if t0 is None else t0)):
         c = json.loads(close or "{}")
         out.append({"arm": arm, "id": oid, "symbol": sym, "side": side, "opened": round(created, 1), "closed": round(upd or 0, 1), "pnl_usd": round(pnl or 0.0, 2),
                     spec["key"]: c.get(spec["key"]), "rule": (c.get("rule") or "")[:60], "held_min": c.get("held_minutes")})
@@ -94,6 +94,35 @@ def pairs(desk, a_rows, b_rows):
             "a_net_usd": round(sum(r["a_pnl"] for r in rows), 2), "b_net_usd": round(sum(r["b_pnl"] for r in rows), 2), "rows": rows}
 
 
+def lane_c(desk):
+    """Lane C (Majors): the OPPOSITE of the running desk (B). Recorder only: ~/jev-majors-invert mirrors every new B trade with the opposite side, same margin/leverage. Compares A, B and C on trades opened since C started."""
+    spec = DESKS[desk]
+    tc = CFG.get("T0_C")
+    if not tc or "C" not in spec or not os.path.exists(f"{spec['C']}/data/desk.db"):
+        return None
+    a, b, c = trades(desk, "A", tc), trades(desk, "B", tc), trades(desk, "C", tc)
+    db = sqlite3.connect(f"file:{spec['C']}/data/desk.db?mode=ro", uri=True, timeout=10)
+    link = {}
+    for oid, body in db.execute("SELECT id, body FROM orders WHERE shadow=1"):
+        try:
+            x = json.loads(body)
+            x = x.get("order") if isinstance(x.get("order"), dict) else x
+        except ValueError:
+            continue
+        if x.get("mirror_of"):
+            link[x["mirror_of"]] = oid
+    cm = {r["id"]: r for r in c}
+    rows = []
+    for br in b:
+        cr = cm.get(link.get(br["id"]))
+        if cr:
+            rows.append({"b_id": br["id"], "c_id": cr["id"], "symbol": br["symbol"], "b_side": br["side"], "c_side": cr["side"], "b_pnl": br["pnl_usd"], "c_pnl": cr["pnl_usd"], "b_roe": br.get("roe"), "c_roe": cr.get("roe"), "b_rule": br["rule"], "c_rule": cr["rule"]})
+    n_open = db.execute("SELECT count(*) FROM orders WHERE shadow=1 AND status='shadow_open'").fetchone()[0]
+    return {"started": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(tc)), "A": metrics(a, desk) if a else {"n": 0}, "B": metrics(b, desk) if b else {"n": 0}, "C": metrics(c, desk) if c else {"n": 0}, "c_open_now": n_open,
+            "pairs": {"paired_closed": len(rows), "b_net_usd": round(sum(r["b_pnl"] for r in rows), 2), "c_net_usd": round(sum(r["c_pnl"] for r in rows), 2), "b_wins_c_loses": sum(1 for r in rows if r["b_pnl"] > 0 >= r["c_pnl"]), "c_wins_b_loses": sum(1 for r in rows if r["c_pnl"] > 0 >= r["b_pnl"])},
+            "pair_rows": rows, "c_rows": c, "note": "C is a recorder: it never trades on its own and never touches the running desk. Compared on trades opened after C started; needs 30+ closed trades per lane for any verdict."}
+
+
 def record(desk, print_only=False):
     a, b = trades(desk, "A"), trades(desk, "B")
     la, lb = DESKS[desk].get("labels", ("guarded", "unfiltered"))
@@ -101,6 +130,9 @@ def record(desk, print_only=False):
     out = {"desk": desk, "updated": time.strftime("%Y-%m-%d %H:%M:%S"), "T0": t0, "started": CFG.get("started_" + desk, CFG["started_et"]), "A_label": la, "B_label": lb, "A_guarded": metrics(a, desk), "B_unfiltered": metrics(b, desk), "comparison": compare(a, b, desk)}
     if DESKS[desk].get("pairs"):
         out["pairs"] = pairs(desk, a, b)
+    lc = lane_c(desk) if desk == "majors" else None
+    if lc:
+        out["lane_c"] = {k: v for k, v in lc.items() if k not in ("pair_rows", "c_rows")}
     if print_only:
         return out
     repo = DESKS[desk]["repo"]
@@ -108,6 +140,13 @@ def record(desk, print_only=False):
     os.makedirs(ex, exist_ok=True)
     json.dump({**CFG, "desk": desk}, open(os.path.join(ex, "ab_config.json"), "w"), indent=1, sort_keys=True)
     json.dump(out, open(os.path.join(ex, "ab_summary.json"), "w"), indent=1, sort_keys=True)
+    if lc:
+        with open(os.path.join(ex, "ab_lane_c_trades.jsonl"), "w") as f:
+            for r in lc["c_rows"]:
+                f.write(json.dumps(r, sort_keys=True) + "\n")
+        with open(os.path.join(ex, "ab_lane_c_pairs.jsonl"), "w") as f:
+            for r in lc["pair_rows"]:
+                f.write(json.dumps(r, sort_keys=True) + "\n")
     if out.get("pairs"):
         with open(os.path.join(ex, "ab_pairs.jsonl"), "w") as f:
             for r in out["pairs"].pop("rows"):
@@ -117,7 +156,7 @@ def record(desk, print_only=False):
             f.write(json.dumps(r, sort_keys=True) + "\n")
     env = {**os.environ, "PATH": "/usr/local/bin:" + os.environ.get("PATH", "/usr/bin:/bin")}
     git = ["git", "-C", repo]
-    subprocess.run(git + ["add", "export/ab_config.json", "export/ab_summary.json", "export/ab_trades.jsonl"] + (["export/ab_pairs.jsonl"] if out.get("pairs") is not None else []), capture_output=True, env=env)
+    subprocess.run(git + ["add", "export/ab_config.json", "export/ab_summary.json", "export/ab_trades.jsonl"] + (["export/ab_pairs.jsonl"] if out.get("pairs") is not None else []) + (["export/ab_lane_c_trades.jsonl", "export/ab_lane_c_pairs.jsonl"] if lc else []), capture_output=True, env=env)
     r = subprocess.run(git + ["commit", "-qm", f"export: A/B guardrails test ({len(a)} guarded / {len(b)} unfiltered closed trades)", "--author", f"{os.path.basename(repo)} <{os.path.basename(repo)}@localhost>"], capture_output=True, text=True, env=env)
     if r.returncode == 0:
         subprocess.run(git + ["push", "-q"], capture_output=True, text=True, timeout=120, env=env)
@@ -132,6 +171,9 @@ def show(o):
     for k in keys:
         print(f"  {k:18s}{str(A.get(k)):>14s}{str(B.get(k)):>14s}")
     print("  ->", o["comparison"]["verdict"], (o["comparison"].get("interval_90") or ""))
+    lc = o.get("lane_c")
+    if lc:
+        print(f"  LANE C (opposite of the running desk, since {lc['started']}): A n={lc['A'].get('n')} net {lc['A'].get('net_usd')} | B n={lc['B'].get('n')} net {lc['B'].get('net_usd')} | C n={lc['C'].get('n')} net {lc['C'].get('net_usd')} | C open now {lc['c_open_now']} | pairs {lc['pairs']['paired_closed']}")
 
 
 if __name__ == "__main__":

@@ -581,6 +581,8 @@ def check_jevdesk():
     base = os.path.join(HOME, "jev-desk")
     if not os.path.isdir(base):
         return
+    if os.path.exists(os.path.join(base, "STOPPED")):                       # user stopped the desk (2026-10-09): do not reload it
+        return note("jev desk", "ok", "stopped by the user (~/jev-desk/STOPPED); delete that file and re-bootstrap the plists to restart")
     label = "com.dhruv.jevdesk.main"
     if not job(label)["loaded"]:
         kick(label)
@@ -645,6 +647,8 @@ def check_jevdesk_grads():
     Heartbeat every 30 s; graduations never stop for an hour, so a connected feed with none means it is deaf."""
     base = os.path.join(HOME, "jev-desk")
     label = "com.dhruv.jevdesk.grads"
+    if os.path.exists(os.path.join(base, "STOPPED")):
+        return
     if not os.path.exists(os.path.join(HOME, "Library", "LaunchAgents", f"{label}.plist")):
         return
     if not job(label)["loaded"]:
@@ -722,11 +726,11 @@ def check_ab():
     if time.time() - last > 55 * 60 and not DRY:
         subprocess.run([sys.executable, os.path.join(HERE, "ab_report.py")], capture_output=True, timeout=300)
     dead = []
-    for d in ("jev-markets-guarded", "jev-majors-guarded"):
+    for d in ("jev-markets-guarded", "jev-majors-guarded", "jev-majors-invert"):
         hb = jload(os.path.join(HOME, d, "data", "heartbeat.json"), None)
         if not hb or time.time() - hb.get("t", 0) > 600:
             dead.append(d)
-            kick("com.dhruv.jevmarkets.guarded" if "markets" in d else "com.dhruv.jevmajors.guarded")
+            kick("com.dhruv.jevmarkets.guarded" if "markets" in d else "com.dhruv.jevmajors.invert" if "invert" in d else "com.dhruv.jevmajors.guarded")
     if dead:
         alert("ab-dead", "A/B test: a guarded copy is not running", ", ".join(dead) + " heartbeat is stale; kickstarted.", every_hours=3)
         return note("ab test", "fail", "guarded copy down: " + ", ".join(dead))
@@ -757,9 +761,11 @@ def check_phone_access():
         except Exception:
             return None
     bad = []
-    for name, port in (("jevdesk", 8788), ("jevmajors", 8789), ("jevmarkets", 8790), ("overview", 8791)):
+    for name, port in (("jevdesk", 8788), ("jevmajors", 8789), ("jevmarkets", 8790), ("jevoptionsiv", 8792), ("zillowdash", 8793), ("askjev", 8794), ("jevpredict", 8795), ("overview", 8791)):
+        if name == "jevdesk" and os.path.exists(os.path.join(HOME, "jev-desk", "STOPPED")):
+            continue
         if code(f"http://127.0.0.1:{port}/" + ("data" if name == "overview" else "api")) is None:
-            kick("com.dhruv.overview" if name == "overview" else f"com.dhruv.{name}.dashboard")
+            kick("com.dhruv.overview" if name == "overview" else "com.dhruv.zillowdash" if name == "zillowdash" else "com.dhruv.askjev" if name == "askjev" else f"com.dhruv.{name}.dashboard")
             bad.append(f"{name} (:{port}) not answering on localhost; kickstarted")
         elif ts_ip and code(f"http://{ts_ip}:{port}/" + ("data" if name == "overview" else "api")) != 401:
             bad.append(f"{name} (:{port}) not reachable with a password on {ts_ip}: password missing (dashboard stays localhost-only) or Tailscale blocked")
