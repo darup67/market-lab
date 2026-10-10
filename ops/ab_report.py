@@ -15,7 +15,7 @@ CFG = json.load(open(os.path.join(HOME, "market-lab", "ops", "data", "ab_config.
 T0 = CFG["T0"]
 DESKS = {"markets": {"A": f"{HOME}/jev-markets-guarded", "B": f"{HOME}/jev-markets", "sym": "symbol", "risk": "risk_usd", "unit": "R", "key": "r", "bank": 30000.0, "status": "closed", "repo": f"{HOME}/jev-markets"},
          "majors": {"A": f"{HOME}/jev-majors", "B": f"{HOME}/jev-majors-guarded", "sym": "coin", "risk": "margin_usd", "unit": "ROE", "key": "roe", "bank": 10000.0, "status": "shadow_closed", "repo": f"{HOME}/jev-majors",
-                    "labels": ("follows Jev", "opposite of Jev"), "pairs": True}}
+                    "labels": ("Jev baseline", "Jev + positioning data")}}
 
 
 def trades(desk, arm):
