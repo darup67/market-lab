@@ -53,8 +53,12 @@ def desk_section():
 
 def main():
     out, notes = [], []
-    mk = load(f"{HOME}/jev-markets/research/mnqreview.py", "mnqreview")
-    mk_md, mk_s = mk.build(DAY)
+    MK_OFF = os.path.exists(f"{HOME}/jev-markets/no_alerts")                      # user 2026-10-13: Jev Markets emails are paused (delete ~/jev-markets/no_alerts to resume)
+    if MK_OFF:
+        mk_md, mk_s = "", {"n": 0, "pnl": 0.0}
+    else:
+        mk = load(f"{HOME}/jev-markets/research/mnqreview.py", "mnqreview")
+        mk_md, mk_s = mk.build(DAY)
     mj = load(f"{HOME}/jev-majors/review.py", "majrev")
     mj_md, mj_s = mj.build(DAY)
     ds_md, ds_s = desk_section()
@@ -64,7 +68,7 @@ def main():
     def para(t):
         return {"type": "para", "text": t}
     secs.append({"title": "Headline", "blocks": [para(f"Paper P&L today across the three desks: ${total:+,.2f}"),
-                                                  para(f"Jev Markets {mk_s['n']} trades ${mk_s['pnl']:+,.0f} · Jev Majors {mj_s['n']} closed ${mj_s['pnl']:+,.2f} ({mj_s['open']} open) · Jev desk {ds_s['n']} trades ${ds_s['pnl']:+,.2f}")]})
+                                                  para(("" if MK_OFF else f"Jev Markets {mk_s['n']} trades ${mk_s['pnl']:+,.0f} · ") + f"Jev Majors {mj_s['n']} closed ${mj_s['pnl']:+,.2f} ({mj_s['open']} open) · Jev desk {ds_s['n']} trades ${ds_s['pnl']:+,.2f}")]})
 
     def sect(title, md):
         body = [l for l in md.split("\n") if l.strip() and not l.startswith("# ") and not l.startswith("Report only")]
@@ -79,7 +83,8 @@ def main():
                 cur = {"title": title, "blocks": []}; secs.append(cur); cur["blocks"].append(para(l.strip().lstrip("- ")))
             else:
                 cur["blocks"].append(para(l.strip().lstrip("- ")))
-    sect("Jev Markets", mk_md)
+    if not MK_OFF:
+        sect("Jev Markets", mk_md)
     sect("Jev Majors", mj_md)
     secs.append({"title": "Jev desk", "blocks": [para(l.strip().lstrip("- ")) for l in ds_md.split("\n") if l.strip()]})
     try:
@@ -95,11 +100,12 @@ def main():
     look = []
     hbm = jload(f"{HOME}/jev-markets/data/heartbeat.json", {})
     g = hbm.get("goal") or {}
-    if g.get("stopped"):
+    if g.get("stopped") and not MK_OFF:
         look.append(f"Jev Markets stopped for the day: {g['stopped']}")
     if (time.time() - (jload(f"{HOME}/jev-desk/data/heartbeat.json", {}).get("last_scan") or 0)) > 1800:
         look.append("Jev desk core scans are slow (over 30 minutes between full scans)")
-    look.append("Compare tomorrow's Globex open (6:05 PM ET onward) against the overnight test results above")
+    if not MK_OFF:
+        look.append("Compare tomorrow's Globex open (6:05 PM ET onward) against the overnight test results above")
     secs.append({"title": "Look at tomorrow", "blocks": [para(x) for x in look]})
     secs = [x for x in secs if x.get('title')]
     print(f"Jev recap {DAY}: total ${total:+,.2f}; sections {[s['title'] for s in secs]}")
