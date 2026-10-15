@@ -91,9 +91,7 @@ def collect_news(tickers, lookback, c):
 
 def jev_banner(ready):
     if ready:
-        return ('<p style="font-size:12px;color:#555;margin:6px 0 14px">Jev labels (topic, direction, '
-                '<b>material</b>) come from TypeSafe&#8217;s Jev reading each headline. They are unvalidated: '
-                'treat them as a reading aid, not a signal.</p>')
+        return ('<p style="font-size:12px;color:#555;margin:6px 0 10px">Jev headline labels are unvalidated: a reading aid, not a signal.</p>')
     return ('<p style="font-size:12px;color:#8a5a00;background:#fff6e0;padding:8px 10px;border-radius:4px;'
             'margin:6px 0 14px">Jev is not connected yet (no TypeSafe key in the Keychain), so headlines are '
             'shown unjudged, newest first. Run <code>python3 ~/jev-client/jev.py --set-key</code> once you '
@@ -190,20 +188,21 @@ def watchlist_report(c):
 
     order = sorted(wl, key=lambda t: (-news[t["id"]]["material"], -news[t["id"]]["relevant"],
                                       -len(news[t["id"]]["rows"])))
+    shown = [t for t in order if news[t["id"]]["material"] or news[t["id"]]["relevant"] or any(t is a for a, _ in ahead)][:12]     # 2026-10-14: only tickers with something to read
+    quiet = [t["tv"] for t in order if t not in shown]
     rows = "".join(
-        f'<tr><td {TD}><b>{e(t["tv"])}</b><br><span style="color:#666;font-size:12px">{e(t["name"])} · {t["kind"]}'
+        f'<tr><td {TD}><b>{e(t["tv"])}</b><br><span style="color:#666;font-size:12px">{e(t["name"])}'
         f'</span>{earn_tag(t, earn)}</td>'
         f'<td {TD}>{jev_cell(news[t["id"]])}</td>'
-        f'<td {TD}>{news_cell(news[t["id"]], w["headlines_per_ticker"])}</td></tr>'
-        for t in order)
-    body += (f'<h3 style="margin:18px 0 4px">All {len(wl)} watchlist tickers · news in the last '
-             f'{w["news_lookback_hours"]}h</h3><table style="width:100%;border-collapse:collapse">'
-             f'<tr><th {TH}>Ticker</th><th {TH}>Jev</th><th {TH}>Headlines</th></tr>{rows}</table>')
+        f'<td {TD}>{news_cell(news[t["id"]], min(w["headlines_per_ticker"], 2))}</td></tr>'
+        for t in shown)
+    body += (f'<h3 style="margin:18px 0 4px">Watchlist news · last {w["news_lookback_hours"]}h</h3><table style="width:100%;border-collapse:collapse">'
+             f'<tr><th {TH}>Ticker</th><th {TH}>Jev</th><th {TH}>Headlines</th></tr>{rows}</table>'
+             + (f'<p style="font-size:12px;color:#888;margin:8px 0 0">Nothing notable: {e(", ".join(quiet))}.</p>' if quiet else ""))
     mat = sum(news[t["id"]]["material"] for t in wl)
     subject = (f"Event Desk · Watchlist briefing: {len(ahead)} earnings ahead" +
                (f", {mat} material headlines" if ready else f", {sum(len(news[t['id']]['rows']) for t in wl)} headlines"))
-    sub = (f"{dt.datetime.now():%A %b %d, %I:%M %p} · {len(wl)} tickers from the TradingView watchlist "
-           f"(list last changed {updated[:10] if updated else '?'}; re-checked against TradingView each weekday 08:33)")
+    sub = f"{dt.datetime.now():%A %b %d, %I:%M %p} · {len(wl)} watchlist tickers"
     return subject, page("Watchlist events briefing", sub, body)
 
 
@@ -255,16 +254,10 @@ def spreads_section(m, b, news):
     except (OSError, ValueError, KeyError):
         rule = "see ~/market-iv-agent/spreads.py"
     head = (f'<h3 style="margin:16px 0 4px">Bull call spreads to act on: {len(act)}</h3>'
-            f'<div style="font-size:12px;color:#555;margin-bottom:6px">From the IV agent&#8217;s '
-            f'{e(m["run"])} run ({e(m["finished"][11:16])}). Rule: Bull options-flow bias, {rule}. Probabilities are the options market&#8217;s own '
-            f'odds, so expected payoff is about the cost: higher odds come with a smaller win. The most any spread '
-            f'can lose is its debit. &#9888; = earnings or a catalyst can land before expiry (more binary). Orders are '
-            f'entered by hand at '
-            f'the limit or better.</div>')
+            f'<div style="font-size:12px;color:#555;margin-bottom:6px">IV scan {e(m["run"])} ({e(m["finished"][11:16])}) · max loss is the debit · &#9888; = catalyst before expiry · enter by hand at the limit or better.</div>')
     if len(act) < b["act_min"]:
         head += (f'<div style="background:#fff6e0;padding:8px 10px;border-radius:4px;margin:6px 0;font-size:12.5px">'
-                 f'Only {len(act)} of {len(m["tickets"])} candidates passed today. The rule is not loosened to '
-                 f'reach {b["act_min"]}; the rest are listed below with the reason they failed.</div>')
+                 f'Only {len(act)} of {len(m["tickets"])} candidates passed; the rule is not loosened.</div>')
     rows = []
     for t in act:
         s = news.get(t["ticker"])
@@ -367,7 +360,7 @@ def sector_report(c, b, deadline=None):
         s = news[x["id"]]
         intensity = min(1.0, s["material"] / 3) if s["judged"] else min(1.0, len(s["rows"]) / 5) * 0.5
         x["impact"] = 100 * (W["score"] * x["score"] / 100 + W["event"] * x["prox"] + W["news"] * intensity)
-    top = sorted(cand, key=lambda x: -x["impact"])[: b["top_n"]]
+    top = sorted(cand, key=lambda x: -x["impact"])[: min(b["top_n"], 5)]          # 2026-10-14: top 5 only (the email was ~100 KB per section)
 
     trs = []
     for i, x in enumerate(top, 1):
@@ -384,27 +377,23 @@ def sector_report(c, b, deadline=None):
             f'move ±{fnum(float(r["implied_move"]) * 100 if r.get("implied_move") else None)}%<br>'
             f'<span style="color:{bcol}">{e(bias)}</span></td>'
             f'<td {TD}>{jev_cell(s)}</td>'
-            f'<td {TD}>{news_cell(s, b["headlines_per_ticker"])}</td></tr>')
+            f'<td {TD}>{news_cell(s, min(b["headlines_per_ticker"], 2))}</td></tr>')
     body = jev_banner(ready)
     body += spreads_section(m, b, news)
-    body += '<h3 style="margin:22px 0 4px">Top 10 by event impact</h3>'
-    body += ('<p style="font-size:12px;color:#555;margin:0 0 10px">Ranked by <b>impact</b>: the IV agent&#8217;s '
-             f'explode score ({W["score"]:.0%}), how soon the next dated catalyst or earnings lands ({W["event"]:.0%}), '
-             f'and news intensity ({W["news"]:.0%}). Impact measures how big the pending event looks, '
-             'not which way it goes. Bias is the IV agent&#8217;s options-flow read.</p>')
+    body += '<h3 style="margin:22px 0 4px">Top 5 by event impact</h3>'
+    body += ('<p style="font-size:12px;color:#555;margin:0 0 10px">Impact = explode score + how soon the next catalyst lands + news intensity. '
+             'It measures how big the event looks, not its direction.</p>')
     body += (f'<table style="width:100%;border-collapse:collapse"><tr><th {TH}>Ticker</th><th {TH}>Impact</th>'
              f'<th {TH}>Next event</th><th {TH}>Options</th><th {TH}>Jev</th><th {TH}>Headlines</th></tr>'
              f'{"".join(trs)}</table>')
-    if iv_report:
-        body += ('<hr style="margin:28px 0 10px;border:0;border-top:3px solid #111">'
-                 f'<h3 style="margin:0 0 6px">Full IV scan · {e(m["run"])}</h3>'
-                 f'<div style="font-size:12px;color:#666;margin-bottom:8px">{e(m["subject"])}</div>{iv_report}')
+    if iv_report and m:
+        body += f'<p style="font-size:11.5px;color:#888;margin:14px 0 0">Full IV scan ({e(m["run"])}) is kept in ~/market-iv-agent, not repeated here.</p>'      # was ~90 KB per section
     acts = act_tickers
     subject = (f"Event Desk · {b['title']} options: " + (f"ACT {'+'.join(acts)}" if acts else "no spread passes") +
                " · events " + ", ".join(x["r"]["ticker"] for x in top[:3]))
     sub = (f"{dt.datetime.now():%A %b %d, %I:%M %p} · from market-iv-agent snapshot {snap_date} "
            f"({len(rows)} names, {len(cand)} checked for news)")
-    return subject, page(f"{b['title']} event impact: top 10", sub, body)
+    return subject, page(f"{b['title']} event impact: top 5", sub, body)
 
 
 # ---------------------------------------------------------------- delivery
@@ -624,6 +613,14 @@ def act_table(items):
             + _safe(risk_overlay_html, items, ev))
 
 
+def quiet_section(it):
+    """2026-10-14: a section with no ACT spread is one line in the digest (name, verdict, the top events from its subject), not its full table; the full section stays in data/digest."""
+    m = re.search(r"Event Desk · (.+?) options: (.+)$", it["subject"])
+    who, rest = (m.group(1), m.group(2)) if m else (it["name"], it["subject"])
+    return (f'<div style="margin:14px 0 2px;font:700 14px {FONT};color:#111827">{e(who)}</div>'
+            f'<div style="font:13px/1.5 {FONT};color:#555">{e(rest)}</div>')
+
+
 def send_digest(c, test, resend=False):
     """One email with bio/pharma + every sector saved today and not yet delivered.
     resend=True rebuilds it from every section saved today, even ones already sent."""
@@ -643,7 +640,7 @@ def send_digest(c, test, resend=False):
     inner = (f'<div style="font-family:{FONT};font-size:13px;color:#111827">{act_table(items)}'
              f'<div style="margin:24px 0 8px;font:700 12px {FONT};letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid #e5e7eb;padding-bottom:6px">In this digest</div>'
              f'<ol style="margin:0;padding-left:20px;font-size:13px">{toc}</ol></div>'
-             + "".join(f'<a name="{e(it["name"])}"></a>{it["body"]}' for it in items))
+             + "".join(f'<a name="{e(it["name"])}"></a>' + (it["body"] if it.get("acts") else quiet_section(it)) for it in items))
     _n, risk, gain = act_totals(items)
     subject = (("[TEST] " if test else "") + ("[Resend] " if resend else "") + "Event Desk · Market Digest: "
                + (f"ACT {len(acts)} · risk ${risk:,.0f} · max profit ${gain:,.0f} · {'+'.join(acts)}" if acts else "no spread passes")
