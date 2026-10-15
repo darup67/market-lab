@@ -4,18 +4,35 @@ Read-only: it only reads each agent's own ledger. All numbers are built from the
   jev_report.py            print the sections as text (no email)
 Agents: Majors (running desk), Majors A (baseline recorder), Majors C (opposite recorder), Markets, Predict, FOMO lane, Options IV; Shadow and AskJev are listed for status.
 Win rate = closed trades with P&L > 0. Return per trade = P&L / stake (Majors margin, Markets risk, Predict cost, Options IV cost, FOMO ticket)."""
-import datetime as dt, json, os, sqlite3, time
+import datetime as dt, json, os, sqlite3, sys, time
+
+sys.path.insert(0, os.path.expanduser("~/jev-client"))
+
+
+def money(x, d=2):
+    return f"{'-' if x < 0 else '+'}${abs(x):,.{d}f}"
 
 HOME = os.path.expanduser("~")
 P = lambda *a: os.path.join(HOME, *a)
 
 
-def _db_trades(folder, status, stake_col):
+def _short(t, n=44):
+    t = str(t or "").strip()
+    return t if len(t) <= n else t[:n - 1].rsplit(" ", 1)[0] + "…"
+
+
+def _db_trades(folder, status, stake_col, sym_col):
     p = P(folder, "data", "desk.db")
     if not os.path.exists(p):
         return None
     db = sqlite3.connect(f"file:{p}?mode=ro", uri=True, timeout=10)
-    rows = [(u or c, pnl or 0.0, st or 0.0) for c, u, pnl, st in db.execute(f"SELECT created, updated, pnl_usd, {stake_col} FROM orders WHERE status=?", (status,))]
+    rows = []
+    for c, u, pnl, st, sym, side, close in db.execute(f"SELECT created, updated, pnl_usd, {stake_col}, {sym_col}, side, close FROM orders WHERE status=?", (status,)):
+        try:
+            rule = (json.loads(close or "{}").get("rule") or "").split(":")[0]
+        except ValueError:
+            rule = ""
+        rows.append((u or c, pnl or 0.0, st or 0.0, f"{sym} {side}", _short(rule, 34)))
     opn = db.execute("SELECT COUNT(*) FROM orders WHERE status=?", ("shadow_open" if status == "shadow_closed" else "open",)).fetchone()[0]
     return rows, opn
 
@@ -39,11 +56,11 @@ def agents():
     for name, role, key, folder in (("Jev Majors", "Hyperliquid perps · running desk (positioning + Phantom)", "jevmajors.main", "jev-majors"),
                                     ("Majors lane A", "baseline Jev recorder (no positioning data)", "jevmajors.guarded", "jev-majors-guarded"),
                                     ("Majors lane C", "opposite-of-desk recorder", "jevmajors.invert", "jev-majors-invert")):
-        r = _db_trades(folder, "shadow_closed", "margin_usd")
+        r = _db_trades(folder, "shadow_closed", "margin_usd", "coin")
         A.append({"name": name, "role": role, "key": key, "mode": "paper" + (" + Kalshi demo mirror" if folder == "jev-majors" else ""), "open": r[1] if r else 0, "trades": r[0] if r else []})
-    r = _db_trades("jev-markets", "closed", "risk_usd")
+    r = _db_trades("jev-markets", "closed", "risk_usd", "symbol")
     A.append({"name": "Jev Markets", "role": "MNQ / MES / micro futures scalper", "key": "jevmarkets.main", "mode": "paper", "open": r[1] if r else 0, "trades": r[0] if r else []})
-    tr = [(t.get("closed") or 0, t.get("pnl") or 0.0, t.get("cost") or 0.0) for f in ("trades.jsonl", "trades_general.jsonl") for t in _jl(P("jev-predict", "data", f)) if t.get("closed")]
+    tr = [(t.get("closed") or 0, t.get("pnl") or 0.0, t.get("cost") or 0.0, _short(t.get("title"), 40), "settled " + str(t.get("outcome"))) for f in ("trades.jsonl", "trades_general.jsonl") for t in _jl(P("jev-predict", "data", f)) if t.get("closed")]
     try:
         n_open = len(json.load(open(P("jev-predict", "data", "book.json"))).get("positions", [])) + len(json.load(open(P("jev-predict", "data", "book_general.json"))).get("positions", []))
     except (OSError, ValueError):
@@ -52,7 +69,7 @@ def agents():
     fo, ftr, live = 0, [], False
     try:
         c = sqlite3.connect(f"file:{P('jev-majors', 'data', 'fomo.db')}?mode=ro", uri=True, timeout=10)
-        ftr = [(t or 0, p or 0.0, u or 0.0) for t, p, u in c.execute("SELECT t_out, pnl, usd FROM lane WHERE t_out IS NOT NULL")]
+        ftr = [(t or 0, p or 0.0, u or 0.0, f"{sy} · {ch or 'solana'}", rs or "") for t, p, u, sy, ch, rs in c.execute("SELECT t_out, pnl, usd, sym, chain, reason FROM lane WHERE t_out IS NOT NULL")]
         fo = c.execute("SELECT COUNT(*) FROM lane WHERE t_out IS NULL").fetchone()[0]
         live = bool((json.load(open(P("jev-majors", "config.json"))).get("fomo_live") or {}).get("enabled"))
     except Exception:
@@ -60,9 +77,9 @@ def agents():
     A.append({"name": "FOMO lane", "role": "memecoin buyer-pace scalps, 9 chains (in Jev Majors)", "key": "jevmajors.fomo", "mode": "paper" + (" · LIVE ARMED" if live else " · live off"), "open": fo, "trades": ftr})
     ot = _jl(P("jev-options-iv", "data", "trades.jsonl"))
     A.append({"name": "Jev Options IV", "role": "bull call spreads from the IV email", "key": "jevoptionsiv.main", "mode": "paper (manual in Robinhood)", "open": sum(1 for t in ot if not t.get("closed")),
-              "trades": [(t["closed"], t.get("pnl") or 0.0, t.get("cost") or 0.0) for t in ot if t.get("closed")]})
+              "trades": [(t["closed"], t.get("pnl") or 0.0, t.get("cost") or 0.0, str(t.get("ticker")) + " spread", _short(t.get("rule"), 34)) for t in ot if t.get("closed")]})
     A.append({"name": "Jev Shadow", "role": "Chronos + FinBERT forecasts, scored vs baseline", "key": "jevshadow", "mode": "forecast only", "open": 0, "trades": None,
-              "note": f"{len(_jl(P('jev-shadow', 'data', 'scored.jsonl')))} forecasts scored"})
+              "note": f"{len(_jl(P('jev-shadow', 'data', 'scored.jsonl')))} scored"})
     A.append({"name": "AskJev", "role": "chat UI for typed questions", "key": "askjev", "mode": "service", "open": 0, "trades": None})
     return A
 
@@ -101,14 +118,13 @@ def build(now=None):
         s = sup.get(a["key"], "not supervised")
         tone = "good" if s == "ok" else "warn" if s == "stopped by user" else "bad"
         t, al = (a["w"]["today"], a["w"]["all"]) if a["w"] else ([], [])
-        rows.append({"a": {"v": a["name"], "bold": True}, "r": a["role"] + " · " + a["mode"], "s": {"v": "OK" if s == "ok" else s, "tone": tone, "bold": True}, "m": a["mode"], "o": str(a["open"]) if a["w"] else "–",
+        rows.append({"a": {"v": a["name"], "bold": True}, "s": {"v": "OK" if s == "ok" else s, "tone": tone, "bold": True}, "m": a["mode"], "o": str(a["open"]) if a["w"] else "–",
                      "t": str(len(t)) if a["w"] else (a.get("note") or "–"),
-                     "p": ({"v": f"${sum(x[1] for x in t):+,.2f}", "tone": "good" if sum(x[1] for x in t) >= 0 else "bad"} if t else "–") if a["w"] else "–",
+                     "p": ({"v": money(sum(x[1] for x in t)), "tone": "good" if sum(x[1] for x in t) >= 0 else "bad"} if t else "–") if a["w"] else "–",
                      "w": f"{fmt_pct(_wr(al))} ({len(al)})" if a["w"] else "–"})
-    sec1 = {"title": "All Jev agents", "note": "Status is the 30-second supervisor's last check" + (f" ({int(sup_age)} s ago)" if sup_age is not None else " (supervisor unreachable)"),
+    sec1 = {"title": "All Jev agents", "note": "Status is the supervisor's last check" + (f" ({int(sup_age)} s ago)." if sup_age is not None else ": unreachable."),
             "blocks": [{"type": "table", "columns": [{"key": "a", "label": "Agent"}, {"key": "s", "label": "Status"}, {"key": "o", "label": "Open", "align": "right"},
-                                                     {"key": "t", "label": "Today", "align": "right"}, {"key": "p", "label": "Today P/L", "align": "right"}, {"key": "w", "label": "Win rate (n)", "align": "right"},
-                                                     {"key": "r", "label": "What it does · mode"}], "rows": rows}]}
+                                                     {"key": "t", "label": "Today", "align": "right"}, {"key": "p", "label": "Today P/L", "align": "right"}, {"key": "w", "label": "Win rate (n)", "align": "right"}], "rows": rows}]}
     # ---- 2. win-rate chart (HTML bars, email-safe)
     def bar(wr, n):
         if wr is None or not n:
@@ -180,15 +196,42 @@ def build(now=None):
     note3 = ("Return per trade in % (P&L ÷ stake) across every agent, last 14 days. The bucket edges are the data's own quantiles, so they move as the results do. "
              "Dark segment = today, light = earlier days. Left of zero is loss.") if len(pooled) >= 12 else "Fewer than 12 closed trades in 14 days, so fixed buckets are used."
     sec3 = {"title": "Daily distribution of trade returns", "note": note3, "blocks": [
-        {"type": "raw", "html": "".join(h2), "text": "\n".join(f"{labels[i]}: {tot_prev[i]} earlier, {tot_today[i]} today" for i in range(len(labels)))},
-        {"type": "table", "columns": cols, "rows": drows, "empty": "No closed trades in the last 14 days."}]}
-    return [sec1, sec2, sec3], A
+        {"type": "raw", "html": "".join(h2), "text": "\n".join(f"{labels[i]}: {tot_prev[i]} earlier, {tot_today[i]} today" for i in range(len(labels)))}]}
+    today_all = [(a["name"], t) for a in A if a["w"] for t in a["w"]["today"]]
+    total = sum(t[1] for _, t in today_all)
+    wins = sum(1 for _, t in today_all if t[1] > 0)
+    ok = sum(1 for a in A if sup.get(a["key"]) == "ok")
+    nsup = sum(1 for a in A if a["key"] in sup)
+    by = {}
+    for n, t in today_all:
+        by[n] = by.get(n, 0.0) + t[1]
+    best, worst = ((max(by.items(), key=lambda kv: kv[1]), min(by.items(), key=lambda kv: kv[1])) if by else (None, None))
+    line1 = f"Paper P&L today {money(total)} across {len(today_all)} closed trades" + (f" ({100 * wins / len(today_all):.0f}% wins)." if today_all else ".")
+    line2 = (f"Best: {best[0]} {money(best[1], 0)} · Worst: {worst[0]} {money(worst[1], 0)}.") if best and worst and best[0] != worst[0] else ""
+    bad = [a["name"] for a in A if sup.get(a["key"]) not in ("ok", None, "stopped by user")]
+    line3 = (f"All {ok} agents running." if not bad else "Needs attention: " + ", ".join(bad) + ".")
+    try:
+        import jev
+        spent, cap = jev.month_spend()
+        spend = f"${spent:.2f} of ${cap:.0f}"
+    except Exception:
+        spend = "n/a"
+    kp = {"type": "kpis", "items": [{"label": "P&L today", "value": money(total, 0), "tone": "good" if total >= 0 else "bad"},
+                                    {"label": "Trades closed", "value": str(len(today_all)), "sub": (f"{wins} won" if today_all else "")},
+                                    {"label": "Agents OK", "value": f"{ok}/{nsup}", "tone": "good" if not bad else "bad"},
+                                    {"label": "Jev API spend", "value": spend, "sub": "this month"}]}
+    top = sorted(today_all, key=lambda x: -abs(x[1][1]))[:12]
+    sec4 = {"title": "Today's closed trades", "note": "Largest by dollar P&L, up to 12.",
+            "blocks": [{"type": "table", "columns": [{"key": "a", "label": "Agent"}, {"key": "t", "label": "Trade"}, {"key": "p", "label": "P&L", "align": "right"}, {"key": "x", "label": "Exit"}],
+                        "rows": [{"a": n, "t": t[3] if len(t) > 3 else "", "p": {"v": money(t[1]), "tone": "good" if t[1] >= 0 else "bad", "bold": True}, "x": t[4] if len(t) > 4 else ""} for n, t in top],
+                        "empty": "No trades closed today."}]}
+    return [{"blocks": [kp]}, sec1, sec2, sec3, sec4], A, {"tldr": [x for x in (line1, line2, line3) if x], "total": total, "n_today": len(today_all)}
 
 
 if __name__ == "__main__":
-    secs, _ = build()
+    secs, _, _m = build()
     for s in secs:
-        print("==", s["title"], "-", s.get("note", ""))
+        print("==", s.get("title"), "-", s.get("note", ""))
         for b in s["blocks"]:
             if b["type"] == "table":
                 for r in b["rows"]:

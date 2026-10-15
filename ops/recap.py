@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One nightly recap email for all three Jev desks (replaces the separate Markets and Majors review emails). 17:50 ET by launchd.
+"""Nightly Jev recap email, 17:50 ET by launchd. 2026-10-14 redesign (less text): a one-line summary, four numbers, every Jev agent, win-rate bars, the return distribution, the largest trades of the day, and only what needs attention.
 Sections: the headline (paper P&L today, per desk), each desk's own review text (Markets: fills, misses, calibration; Majors: trades and positions; Jev desk: trades by lane, drawdown, guardian pauses),
 Jev API spend, the watchdog's verdict, and a short 'look at tomorrow' list. Report only: it changes nothing.
   recap.py            build and email
@@ -25,99 +25,40 @@ def jload(p, d=None):
         return d
 
 
-def desk_section():
-    db = sqlite3.connect(f"file:{HOME}/jev-desk/data/desk.db?mode=ro", uri=True, timeout=10)
-    rows = []
-    for body, ticket, pnl, upd in db.execute("SELECT body, ticket_usd, pnl_usd, updated FROM orders WHERE status='shadow_closed'"):
-        rows.append((json.loads(body or "{}"), ticket or 0, pnl or 0.0, upd or 0))
-    day0 = dt.datetime.combine(dt.date.today(), dt.time.min).timestamp()
-    today = [r for r in rows if r[3] >= day0]
-    lane = lambda b: "pattern" if b.get("pattern") else "pregrad:explore" if b.get("pregrad_explore") else (b.get("lane") or "gated")
-    L = [f"- {len(today)} paper trades closed today, net ${sum(r[2] for r in today):+,.2f}" if today else "- no trades closed today"]
-    by = {}
-    for b, t, p, u in today:
-        by.setdefault(lane(b), []).append(p)
-    for k, v in sorted(by.items()):
-        L.append(f"    - {k}: {len(v)} trades, ${sum(v):+,.2f}")
-    tot = sum(r[2] for r in rows)
-    wins = sum(1 for r in rows if r[2] > 0)
-    L.append(f"- since 10/06: {len(rows)} trades, {wins / max(1, len(rows)):.0%} wins, net ${tot:+,.2f} on a $1,000 bank (breaker at -$400)")
-    g = (jload(f"{HOME}/jev-desk/data/guardian.json", {}) or {}).get("paused") or {}
-    live = [k for k, v in g.items() if v.get("until", 0) > time.time()]
-    L.append("- guardian pauses: " + (", ".join(live) if live else "none"))
-    hb = jload(f"{HOME}/jev-desk/data/heartbeat.json", {})
-    if hb.get("last_scan"):
-        L.append(f"- last full scan {int((time.time() - hb['last_scan']) / 60)} minutes ago")
-    return "\n".join(L), {"n": len(today), "pnl": sum(r[2] for r in today)}
+def suggestions(limit=3):
+    """Majors' 'Suggested changes (NOT applied)' lines, trimmed: the one part of the old per-desk review text worth a place in the email."""
+    try:
+        md, _ = load(f"{HOME}/jev-majors/review.py", "majrev").build(DAY)
+    except Exception:
+        return []
+    out, on = [], False
+    for ln in md.split("\n"):
+        if ln.startswith("## "):
+            on = ln[3:].lower().startswith("suggested")
+        elif on and ln.strip().startswith(("-", "*")):
+            t = ln.strip().lstrip("-* ").strip()
+            out.append(t if len(t) <= 130 else t[:127].rsplit(" ", 1)[0] + "…")
+    return out[:limit]
 
 
 def main():
-    out, notes = [], []
-    MK_OFF = os.path.exists(f"{HOME}/jev-markets/no_alerts")                      # user 2026-10-13: Jev Markets emails are paused (delete ~/jev-markets/no_alerts to resume)
-    if MK_OFF:
-        mk_md, mk_s = "", {"n": 0, "pnl": 0.0}
-    else:
-        mk = load(f"{HOME}/jev-markets/research/mnqreview.py", "mnqreview")
-        mk_md, mk_s = mk.build(DAY)
-    mj = load(f"{HOME}/jev-majors/review.py", "majrev")
-    mj_md, mj_s = mj.build(DAY)
-    ds_md, ds_s = "", {"n": 0, "pnl": 0.0}                       # Jev desk retired 2026-10-14 (the FOMO lane in Jev Majors replaced it)
-    total = mk_s["pnl"] + mj_s["pnl"] + ds_s["pnl"]
-    secs = []
-    try:                                                                           # user 2026-10-14: every Jev agent first, then the win-rate chart and the daily return distribution
-        import jev_report
-        secs.extend(jev_report.build()[0])
-    except Exception as e:
-        print("jev_report failed:", repr(e))
-        secs.append({"title": "All Jev agents", "blocks": [{"type": "para", "text": f"Agent report unavailable: {e!r}"}]})
-
-    def para(t):
-        return {"type": "para", "text": t}
-    secs.append({"title": "Headline", "blocks": [para(f"Paper P&L today across the desks: ${total:+,.2f}"),
-                                                  para(("" if MK_OFF else f"Jev Markets {mk_s['n']} trades ${mk_s['pnl']:+,.0f} · ") + f"Jev Majors {mj_s['n']} closed ${mj_s['pnl']:+,.2f} ({mj_s['open']} open)")]})
-
-    def sect(title, md):
-        body = [l for l in md.split("\n") if l.strip() and not l.startswith("# ") and not l.startswith("Report only")]
-        blocks, cur = [], None
-        for l in body:
-            if l.startswith("## "):
-                if l[3:].startswith("What could I be wrong") and title != "Jev Markets":
-                    cur = {"title": "", "blocks": []}                                  # one 'what could I be wrong about' (Markets') is enough
-                    continue
-                cur = {"title": f"{title}: {l[3:]}", "blocks": []}; secs.append(cur)
-            elif cur is None:
-                cur = {"title": title, "blocks": []}; secs.append(cur); cur["blocks"].append(para(l.strip().lstrip("- ")))
-            else:
-                cur["blocks"].append(para(l.strip().lstrip("- ")))
-    if not MK_OFF:
-        sect("Jev Markets", mk_md)
-    sect("Jev Majors", mj_md)
-    try:
-        import jev
-        spent, cap = jev.month_spend()
-        sp = f"Jev API spend this month ${spent:.2f} of ${cap:.0f}"
-    except Exception:
-        sp = "Jev API spend unavailable"
-    st = jload(f"{HOME}/market-lab/ops/data/status.json", {}) or {}
-    checks = st.get("checks", [])
+    import jev_report
+    secs, agents, meta = jev_report.build()
+    sug = suggestions()
+    if sug:
+        secs.append({"title": "Suggested changes", "note": "Not applied. Ask Claude to apply any of them.", "blocks": [{"type": "list", "items": sug}]})
+    checks = (jload(f"{HOME}/market-lab/ops/data/status.json", {}) or {}).get("checks", [])
     bad = [f"{c['check']}: {c['msg']}" for c in checks if c.get("level") == "fail"]
-    secs.append({"title": "Spend and health", "blocks": [para(sp), para(f"Watchdog: {len(checks) - len(bad)} of {len(checks)} checks ok" + ("" if not bad else "; failing: " + "; ".join(bad)))]})
-    look = []
-    hbm = jload(f"{HOME}/jev-markets/data/heartbeat.json", {})
-    g = hbm.get("goal") or {}
-    if g.get("stopped") and not MK_OFF:
-        look.append(f"Jev Markets stopped for the day: {g['stopped']}")
-    if not MK_OFF:
-        look.append("Compare tomorrow's Globex open (6:05 PM ET onward) against the overnight test results above")
-    secs.append({"title": "Look at tomorrow", "blocks": [para(x) for x in look]})
-    secs = [x for x in secs if x.get('title')]
-    print(f"Jev recap {DAY}: total ${total:+,.2f}; sections {[s['title'] for s in secs]}")
+    if bad:
+        secs.append({"title": "Needs attention", "blocks": [{"type": "list", "items": [x if len(x) <= 140 else x[:137] + "…" for x in bad[:5]]}]})
+    total = meta["total"]
+    print(f"Jev recap {DAY}: total ${total:+,.2f}; sections {[s.get('title') or 'glance' for s in secs]}")
     if "--no-email" in sys.argv:
         return
     import email_ui
     email_ui.send(f"Jev Desks · Nightly recap: {DAY} · ${total:+,.0f} paper today",
-                  {"kind": "Nightly recap", "status": {"text": f"${total:+,.0f}", "tone": "good" if total >= 0 else "bad"}, "title": f"Jev desks nightly recap: {DAY}",
-                   "subtitle": "Report only: nothing here changes any setting", "sections": secs, "footer": "~/market-lab/ops/recap.py"})
+                  {"kind": "Nightly recap", "status": {"text": f"${total:+,.0f}", "tone": "good" if total >= 0 else "bad"}, "title": f"Jev nightly recap · {DAY}",
+                   "tldr": meta["tldr"], "sections": secs, "footer": "Paper results only"})
 
 
 if __name__ == "__main__":
