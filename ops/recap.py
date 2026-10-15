@@ -64,6 +64,12 @@ def main():
     ds_md, ds_s = "", {"n": 0, "pnl": 0.0}                       # Jev desk retired 2026-10-14 (the FOMO lane in Jev Majors replaced it)
     total = mk_s["pnl"] + mj_s["pnl"] + ds_s["pnl"]
     secs = []
+    try:                                                                           # user 2026-10-14: every Jev agent first, then the win-rate chart and the daily return distribution
+        import jev_report
+        secs.extend(jev_report.build()[0])
+    except Exception as e:
+        print("jev_report failed:", repr(e))
+        secs.append({"title": "All Jev agents", "blocks": [{"type": "para", "text": f"Agent report unavailable: {e!r}"}]})
 
     def para(t):
         return {"type": "para", "text": t}
