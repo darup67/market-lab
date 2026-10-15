@@ -1,8 +1,8 @@
 {
-  "level": 31400,
-  "direction": "up",
+  "level": 29750,
+  "direction": "down",
   "armed": false,
-  "created": "2026-10-05T13:20:00-04:00",
-  "triggered_at": "2026-10-05T20:33:15",
-  "triggered_price": 31400.2
+  "created": "2026-10-14T19:15:00-04:00",
+  "triggered_at": "2026-10-15T08:30:13",
+  "triggered_price": 29738.2
 }
