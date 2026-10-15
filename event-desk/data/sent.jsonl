@@ -218,3 +218,5 @@
 {"t": 1792035063.171712, "email": "technology", "subject": "BUILD FAILED: AttributeError(\"'str' object has no attribute 'removesuffix'\")", "ok": false, "test": false}
 {"t": 1792035063.171885, "email": "utilities", "subject": "BUILD FAILED: AttributeError(\"'str' object has no attribute 'removesuffix'\")", "ok": false, "test": false}
 {"t": 1792035868.921692, "email": "watchlist", "subject": "Event Desk \u00b7 Watchlist briefing: 1 earnings ahead, 26 material headlines (in morning brief)", "ok": true, "test": false}
+{"t": 1792035882.562722, "email": "digest-resend", "subject": "[TEST] [Resend] Event Desk \u00b7 Market Digest: ACT 5 \u00b7 risk $8,940 \u00b7 max profit $5,760 \u00b7 CRL+EXEL+NFLX+FAST+WDC \u00b7 11 sections", "ok": true, "test": true}
+{"t": 1792068710.4428742, "email": "watchlist", "subject": "Event Desk \u00b7 Watchlist briefing: 2 earnings ahead, 22 material headlines (in morning brief)", "ok": true, "test": false}
