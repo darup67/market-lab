@@ -372,14 +372,12 @@ DEPS = os.path.join(HERE, "deps")
 VENVS = {   # name: (python, extra env the LaunchAgents set)
     "market-ml": (os.path.join(HOME, ".venvs", "market-ml", "bin", "python"),
                   {"DYLD_FALLBACK_LIBRARY_PATH": os.path.join(HOME, ".venvs/market-ml/lib/python3.11/site-packages/torch/lib")}),
-    "jev-desk": (os.path.join(HOME, "jev-desk", ".venv", "bin", "python"), {}),
     "jev-majors": (os.path.join(HOME, "jev-majors", ".venv", "bin", "python"), {}),
     "jev-markets": (os.path.join(HOME, "jev-markets", ".venv", "bin", "python"), {}),
 }
 PINS = {    # symlink: exact target it must resolve to
     os.path.join(HOME, ".local", "bin", "node"): os.path.join(HOME, ".local/opt/node-v22.22.3/bin/node"),
     os.path.join(HOME, ".venvs", "market-ml", "bin", "python"): os.path.join(HOME, ".local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3.11"),
-    os.path.join(HOME, "jev-desk", ".venv", "bin", "python"): os.path.join(HOME, ".local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3.11"),
     os.path.join(HOME, "jev-majors", ".venv", "bin", "python"): os.path.join(HOME, ".local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3.11"),
     os.path.join(HOME, "jev-markets", ".venv", "bin", "python"): os.path.join(HOME, ".local/share/uv/python/cpython-3.11.15-macos-aarch64-none/bin/python3.11"),
 }
@@ -461,7 +459,7 @@ def check_platform():
         note("platform", "ok", f"pins intact, imports {'match baseline' if imports_due else 'checked daily'}, {free_gb:.0f} GB free")
 
 
-REPOS = ["asset-agents", "coin-launch-agent", "flip-notifier", "flux-lab", "jev-client", "jev-desk", "jev-majors", "jev-markets", "kalshi-btc-agent", "kalshi-btc-1h-agent", "kalshi-commodity-agent",
+REPOS = ["asset-agents", "coin-launch-agent", "flip-notifier", "flux-lab", "jev-client", "jev-majors", "jev-markets", "kalshi-btc-agent", "kalshi-btc-1h-agent", "kalshi-commodity-agent",
          "market-iv-agent", "market-lab", "portfolio-agent", "trade-core", "zillow-agent"]
 GIT = "/usr/local/bin/git"   # absolute: /usr/bin/git is the CLT stub and pops an install dialog
 
@@ -761,7 +759,7 @@ def check_phone_access():
         except Exception:
             return None
     bad = []
-    for name, port in (("jevdesk", 8788), ("jevmajors", 8789), ("jevmarkets", 8790), ("jevoptionsiv", 8792), ("zillowdash", 8793), ("askjev", 8794), ("jevpredict", 8795), ("overview", 8791)):
+    for name, port in (("jevmajors", 8789), ("jevmarkets", 8790), ("jevoptionsiv", 8792), ("zillowdash", 8793), ("askjev", 8794), ("jevpredict", 8795), ("overview", 8791)):
         if name == "jevdesk" and os.path.exists(os.path.join(HOME, "jev-desk", "STOPPED")):
             continue
         if code(f"http://127.0.0.1:{port}/" + ("data" if name == "overview" else "api")) is None:
@@ -1073,7 +1071,7 @@ def main():
         check_flip(trading)
     except Exception as ex:
         note("flip notifier", "fail", f"watchdog error {ex!r}")
-    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_jevdesk, check_jevdesk_grads, check_jevmajors, check_jevmarkets, check_supervisor, check_ab, check_phone_access, check_jev_budget, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
+    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_jevmajors, check_jevmarkets, check_supervisor, check_ab, check_phone_access, check_jev_budget, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
         try:
             fn()
         except Exception as ex:

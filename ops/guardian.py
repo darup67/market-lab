@@ -106,7 +106,7 @@ def apply(desk, bad, allg, days, label, dry):
     return g, changes
 
 
-ACTIVE = {"jev-desk": True, "jev-majors": False, "jev-markets": False}      # user 2026-10-09: the guardian stays on the Jev desk only; its pauses are cleared on the others
+ACTIVE = {"jev-desk": False, "jev-majors": False, "jev-markets": False}      # user 2026-10-09: the guardian stays on the Jev desk only; its pauses are cleared on the others
 
 
 def main():

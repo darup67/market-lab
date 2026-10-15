@@ -6,8 +6,7 @@ import json, os, sqlite3, statistics, time
 
 HOME = os.path.expanduser("~")
 GATES = {"days": 21, "trades": 20, "profit_factor": 1.3, "max_drawdown": 0.15}
-DESKS = [("Jev desk (memecoins, spot)", f"{HOME}/jev-desk/data/desk.db", "ticker", "ticket_usd"),
-         ("Jev Majors (perps)", f"{HOME}/jev-majors/data/desk.db", "coin", "margin_usd"),
+DESKS = [("Jev Majors (perps)", f"{HOME}/jev-majors/data/desk.db", "coin", "margin_usd"),
          ("Jev Markets (US stocks, ETFs, futures)", f"{HOME}/jev-markets/data/desk.db", "symbol", "risk_usd")]
 
 
