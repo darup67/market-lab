@@ -721,12 +721,12 @@ def check_ab():
     """A/B guardrail test (ops/ab_report.py): record both arms hourly into each repo's export/ store, and make sure the guarded copies are alive."""
     cfgp = os.path.join(DATA, "ab_config.json")
     if not os.path.exists(cfgp):
-        return note("ab test", "ok", "retired 2026-10-14 (lanes archived in ~/Archive/ab-lanes-2026-10-14)")
+        return note("ab test", "ok", "A/B test not configured")
     last = os.path.getmtime(os.path.join(HOME, "jev-markets", "export", "ab_summary.json")) if os.path.exists(os.path.join(HOME, "jev-markets", "export", "ab_summary.json")) else 0
     if time.time() - last > 55 * 60 and not DRY:
         subprocess.run([sys.executable, os.path.join(HERE, "ab_report.py")], capture_output=True, timeout=300)
     dead = []
-    for d in ("jev-markets-guarded", "jev-majors-guarded", "jev-majors-invert"):
+    for d in ("jev-majors-guarded", "jev-majors-invert"):                       # Markets guarded was retired 2026-10-14; Majors A and C stay online
         hb = jload(os.path.join(HOME, d, "data", "heartbeat.json"), None)
         if not hb or time.time() - hb.get("t", 0) > 600:
             dead.append(d)
@@ -734,7 +734,7 @@ def check_ab():
     if dead:
         alert("ab-dead", "A/B test: a guarded copy is not running", ", ".join(dead) + " heartbeat is stale; kickstarted.", every_hours=3)
         return note("ab test", "fail", "guarded copy down: " + ", ".join(dead))
-    note("ab test", "ok", "both arms running; results in each repo's export/ab_summary.json")
+    note("ab test", "ok", "Majors A (baseline) and C (opposite) running; results in jev-majors/export/ab_summary.json")
 
 
 def check_phone_access():

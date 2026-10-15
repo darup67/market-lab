@@ -179,6 +179,8 @@ def show(o):
 if __name__ == "__main__":
     po = "--print" in sys.argv
     for d in DESKS:
+        if not os.path.isdir(DESKS[d]["A"]):                 # an arm that was retired (Markets guarded, 2026-10-14) is skipped
+            continue
         try:
             show(record(d, print_only=po))
         except Exception as e:
