@@ -217,3 +217,4 @@
 {"t": 1792035063.171529, "email": "real-estate", "subject": "BUILD FAILED: AttributeError(\"'str' object has no attribute 'removesuffix'\")", "ok": false, "test": false}
 {"t": 1792035063.171712, "email": "technology", "subject": "BUILD FAILED: AttributeError(\"'str' object has no attribute 'removesuffix'\")", "ok": false, "test": false}
 {"t": 1792035063.171885, "email": "utilities", "subject": "BUILD FAILED: AttributeError(\"'str' object has no attribute 'removesuffix'\")", "ok": false, "test": false}
+{"t": 1792035868.921692, "email": "watchlist", "subject": "Event Desk \u00b7 Watchlist briefing: 1 earnings ahead, 26 material headlines (in morning brief)", "ok": true, "test": false}
