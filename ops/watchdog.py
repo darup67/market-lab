@@ -776,6 +776,23 @@ def check_phone_access():
         note("phone access", "ok", "Mac awake, Tailscale up, 3 dashboards reachable + password-gated")
 
 
+def check_supervisor():
+    """The 30-second Jev supervisor (~/jev-client/supervisor.py) is the first layer under this watchdog; this is the other half of the mutual watch."""
+    f = os.path.join(HOME, "jev-client", "data", "supervisor.json")
+    age = time.time() - os.path.getmtime(f) if os.path.exists(f) else None
+    j = job("com.dhruv.supervisor")
+    if not j["loaded"] or age is None or age > 300:
+        if attempt("supervisor-kick", 6):
+            kick("com.dhruv.supervisor")
+        alert("supervisor-stale", "Jev supervisor not running", f"~/jev-client/data/supervisor.json is {'missing' if age is None else f'{int(age // 60)} min old'}; loaded={j['loaded']}. Kickstarted com.dhruv.supervisor.", every_hours=3)
+        return note("jev supervisor", "fail", "stale; kicked")
+    try:
+        s = json.load(open(f))["status"]
+        note("jev supervisor", "ok", s.get("summary", "ok"))
+    except Exception:
+        note("jev supervisor", "warn", "status unreadable")
+
+
 def check_jevmarkets():
     """Jev Markets (~/jev-markets): US stocks + ETFs + futures paper desk. Jobs loaded, heartbeat and live data fresh, the daily
     screen current on trading days, no breaker, errors low. Repair = kickstart. Entirely separate from jevdesk and jevmajors."""
@@ -1056,7 +1073,7 @@ def main():
         check_flip(trading)
     except Exception as ex:
         note("flip notifier", "fail", f"watchdog error {ex!r}")
-    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_jevdesk, check_jevdesk_grads, check_jevmajors, check_jevmarkets, check_ab, check_phone_access, check_jev_budget, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
+    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_jevdesk, check_jevdesk_grads, check_jevmajors, check_jevmarkets, check_supervisor, check_ab, check_phone_access, check_jev_budget, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
         try:
             fn()
         except Exception as ex:
