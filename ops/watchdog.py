@@ -759,7 +759,7 @@ def check_phone_access():
         except Exception:
             return None
     bad = []
-    for name, port in (("jevmajors", 8789), ("jevshop", 8796), ("jevmarkets", 8790), ("jevoptionsiv", 8792), ("zillowdash", 8793), ("askjev", 8794), ("jevpredict", 8795), ("overview", 8791)):
+    for name, port in (("jevmajors", 8789), ("jevshop", 8796), ("jevmarkets", 8790), ("jevmarketsinvert", 8797), ("jevoptionsiv", 8792), ("zillowdash", 8793), ("askjev", 8794), ("jevpredict", 8795), ("overview", 8791)):
         if name == "jevdesk" and os.path.exists(os.path.join(HOME, "jev-desk", "STOPPED")):
             continue
         if code(f"http://127.0.0.1:{port}/" + ("data" if name == "overview" else "api")) is None:
