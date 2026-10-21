@@ -1,5 +1,8 @@
 """Monthly theme tracker: trend, distance from highs and momentum rank for the 2027 theme ETFs, vs QQQ.
 Writes market-lab/data/theme_tracker.json; the 08:55 morning brief (flip-notifier/headless-flip.js) shows it once per month.
+Rebalance column = the tested monthly rotation: hold the 3 themes with the best 3-month return, swap on the first weekday of each month
+(backtest 2017-2026 on 14 theme ETFs: 24.4%/yr vs QQQ 21.0%, max drop -26%; buffers that keep a theme until rank 5-8 did worse; level-based timing
+(pullback to the 50-day, 200-day reclaim, breakouts) did NOT beat entering on any day, so the 50/200-day levels are reference only).
 Research only: no orders, no recommendations. Run: python3 theme_tracker.py [--force]"""
 import datetime as dt, json, os, sys, time
 import requests
@@ -30,7 +33,7 @@ def row(sym, name):
     below = sum(1 for i in range(-63, -5) if len(c) >= 200 - i and c[i] < sum(c[i - 199:i + 1]) / 200) if len(c) > 270 else 0
     turning = bool(m200 and c[-1] > m200 and below >= 35)
     return {"sym": sym, "theme": name, "px": round(c[-1], 2), "r1m": ret(21), "r3m": ret(63), "r6m": ret(126), "r12m": ret(252),
-            "off_high": round(100 * (c[-1] / hi - 1), 1), "vs_200d": round(100 * (c[-1] / m200 - 1), 1) if m200 else None, "trend": trend, "turning_up": turning}
+            "off_high": round(100 * (c[-1] / hi - 1), 1), "ma50": round(m50, 2) if m50 else None, "ma200": round(m200, 2) if m200 else None, "vs_200d": round(100 * (c[-1] / m200 - 1), 1) if m200 else None, "trend": trend, "turning_up": turning}
 
 
 def main(force=False):
@@ -57,7 +60,14 @@ def main(force=False):
     bench = row(BENCH, "Nasdaq-100")
     top3 = [r["sym"] for r in rows[:3]]
     prev_top3 = prev.get("top3") if prev.get("month") != month else prev.get("prev_top3")
-    out = {"month": month, "t": time.time(), "rows": rows, "bench": bench, "top3": top3, "prev_top3": prev_top3,
+    prev_set = set(prev_top3 or [])
+    for r in rows:
+        inn = r["sym"] in top3
+        r["action"] = ("HOLD" if r["sym"] in prev_set else "BUY") if inn and prev_top3 else "IN" if inn else "SELL" if r["sym"] in prev_set else "OUT"
+    nxt = (dt.date.today().replace(day=1) + dt.timedelta(days=32)).replace(day=1)
+    while nxt.weekday() >= 5:
+        nxt += dt.timedelta(days=1)
+    out = {"month": month, "next_rebalance": nxt.isoformat(), "t": time.time(), "rows": rows, "bench": bench, "top3": top3, "prev_top3": prev_top3,
            "turning_up": [r["sym"] for r in rows if r["turning_up"]], "beating_qqq_3m": [r["sym"] for r in rows if (r["r3m"] or -999) > (bench["r3m"] or 0)], "errors": bad, "shown": None}
     json.dump(out, open(OUT, "w"), indent=1)
     print(json.dumps({k: out[k] for k in ("month", "top3", "prev_top3", "turning_up", "beating_qqq_3m", "errors")}, indent=1))
