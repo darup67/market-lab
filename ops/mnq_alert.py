@@ -19,11 +19,11 @@ import json, os, subprocess, sys, time, urllib.parse, urllib.request
 from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CONFIG = os.path.join(HERE, "mnq-alert.json")
-LOG = os.path.join(HERE, "mnq-alert.log")
+CONFIG = os.environ.get("MNQ_ALERT_CONFIG") or os.path.join(HERE, "mnq-alert.json")   # a second alert runs with its own config + log (com.dhruv.mnqalert2)
+LOG = os.environ.get("MNQ_ALERT_LOG") or os.path.join(HERE, "mnq-alert.log")
 UA = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
 COIN = "xyz:XYZ100"
-POLL_S, CANDLE_S, BASIS_S = 2, 10, 900
+POLL_S, CANDLE_S, BASIS_S = float(os.environ.get("MNQ_ALERT_POLL", 5)), 10, 900   # 5 s poll (was 2): two alerts + other Jev agents share Hyperliquid's per-IP limit; the 10 s candle high/low still catches wicks
 
 
 def log(msg):
@@ -166,6 +166,8 @@ def main():
             errs += 1
             if errs in (1, 30, 150):
                 log(f"feed error x{errs}: {e}")
+            if "429" in str(e):
+                time.sleep(15)                        # rate-limited: back off instead of adding to the burst
         time.sleep(POLL_S)
 
 
