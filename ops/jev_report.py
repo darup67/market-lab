@@ -53,9 +53,9 @@ def _jl(path):
 def agents():
     """[{name, role, key (supervisor id), mode, open, trades: [(t_close, pnl, stake)]}] in the order shown."""
     A = []
-    for name, role, key, folder in (("Jev Majors", "Hyperliquid perps · running desk (positioning + Phantom)", "jevmajors.main", "jev-majors"),
-                                    ("Majors lane A", "baseline Jev recorder (no positioning data)", "jevmajors.guarded", "jev-majors-guarded"),
-                                    ("Majors lane C", "opposite-of-desk recorder", "jevmajors.invert", "jev-majors-invert")):
+    for name, role, key, folder in (("Jev Perps", "Kalshi perps · running desk (was Jev Majors)", "jevmajors.main", "jev-majors"),
+                                    ("Perps lane A", "baseline Jev recorder (no positioning data)", "jevmajors.guarded", "jev-majors-guarded"),
+                                    ("Perps lane C", "opposite-of-desk recorder", "jevmajors.invert", "jev-majors-invert")):
         r = _db_trades(folder, "shadow_closed", "margin_usd", "coin")
         A.append({"name": name, "role": role, "key": key, "mode": "paper" + (" + Kalshi demo mirror" if folder == "jev-majors" else ""), "open": r[1] if r else 0, "trades": r[0] if r else []})
     r = _db_trades("jev-markets", "closed", "risk_usd", "symbol")
@@ -68,13 +68,13 @@ def agents():
     A.append({"name": "Jev Predict", "role": "Kalshi 1-hour BTC (+ other markets)", "key": "jevpredict.main", "mode": "paper + Kalshi demo mirror", "open": n_open, "trades": tr})
     fo, ftr, live = 0, [], False
     try:
-        c = sqlite3.connect(f"file:{P('jev-majors', 'data', 'fomo.db')}?mode=ro", uri=True, timeout=10)
+        c = sqlite3.connect(f"file:{P('jev-coin-desk', 'data', 'fomo.db')}?mode=ro", uri=True, timeout=10)
         ftr = [(t or 0, p or 0.0, u or 0.0, f"{sy} · {ch or 'solana'}", rs or "") for t, p, u, sy, ch, rs in c.execute("SELECT t_out, pnl, usd, sym, chain, reason FROM lane WHERE t_out IS NOT NULL")]
         fo = c.execute("SELECT COUNT(*) FROM lane WHERE t_out IS NULL").fetchone()[0]
-        live = bool((json.load(open(P("jev-majors", "config.json"))).get("fomo_live") or {}).get("enabled"))
+        live = bool((json.load(open(P("jev-coin-desk", "config.json"))).get("fomo_live") or {}).get("enabled"))
     except Exception:
         pass
-    A.append({"name": "FOMO lane", "role": "memecoin buyer-pace scalps, 9 chains (in Jev Majors)", "key": "jevmajors.fomo", "mode": "paper" + (" · LIVE ARMED" if live else " · live off"), "open": fo, "trades": ftr})
+    A.append({"name": "Jev Coin Desk", "role": "FOMO memecoin lane · Base early pools (own agent since 2026-10-22)", "key": "jevcoindesk.main", "mode": "paper" + (" · LIVE ARMED" if live else " · live off"), "open": fo, "trades": ftr})
     ot = _jl(P("jev-options-iv", "data", "trades.jsonl"))
     A.append({"name": "Jev Options IV", "role": "bull call spreads from the IV email", "key": "jevoptionsiv.main", "mode": "paper (manual in Robinhood)", "open": sum(1 for t in ot if not t.get("closed")),
               "trades": [(t["closed"], t.get("pnl") or 0.0, t.get("cost") or 0.0, str(t.get("ticker")) + " spread", _short(t.get("rule"), 34)) for t in ot if t.get("closed")]})
