@@ -724,7 +724,7 @@ def check_ab():
     if time.time() - last > 55 * 60 and not DRY:
         subprocess.run([sys.executable, os.path.join(HERE, "ab_report.py")], capture_output=True, timeout=300)
     dead = []
-    for d in ("jev-majors-guarded", "jev-majors-invert"):                       # Markets guarded was retired 2026-10-14; Majors A and C stay online
+    for d in ("jev-majors-invert",):                       # Markets guarded retired 2026-10-14; Perps lane A retired 2026-10-22; lane B = Jev Perps
         hb = jload(os.path.join(HOME, d, "data", "heartbeat.json"), None)
         if not hb or time.time() - hb.get("t", 0) > 600:
             dead.append(d)
@@ -732,7 +732,7 @@ def check_ab():
     if dead:
         alert("ab-dead", "A/B test: a guarded copy is not running", ", ".join(dead) + " heartbeat is stale; kickstarted.", every_hours=3)
         return note("ab test", "fail", "guarded copy down: " + ", ".join(dead))
-    note("ab test", "ok", "Majors A (baseline) and C (opposite) running; results in jev-majors/export/ab_summary.json")
+    note("ab test", "ok", "Jev Perps (former lane B) running")
 
 
 def check_phone_access():

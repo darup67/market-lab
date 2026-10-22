@@ -53,8 +53,7 @@ def _jl(path):
 def agents():
     """[{name, role, key (supervisor id), mode, open, trades: [(t_close, pnl, stake)]}] in the order shown."""
     A = []
-    for name, role, key, folder in (("Jev Perps", "inverted Jev signals (was Perps lane B) · Kalshi demo mirror", "jevmajors.invert", "jev-majors-invert"),
-                                    ("Perps lane A", "baseline Jev recorder (no positioning data)", "jevmajors.guarded", "jev-majors-guarded")):
+    for name, role, key, folder in (("Jev Perps", "inverted Jev signals (was Perps lane B) · Kalshi demo mirror", "jevmajors.invert", "jev-majors-invert")):
         r = _db_trades(folder, "shadow_closed", "margin_usd", "coin")
         A.append({"name": name, "role": role, "key": key, "mode": "paper" + (" + Kalshi demo mirror" if folder == "jev-majors-invert" else ""), "open": r[1] if r else 0, "trades": r[0] if r else []})
     r = _db_trades("jev-markets", "closed", "risk_usd", "symbol")
