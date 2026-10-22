@@ -53,11 +53,10 @@ def _jl(path):
 def agents():
     """[{name, role, key (supervisor id), mode, open, trades: [(t_close, pnl, stake)]}] in the order shown."""
     A = []
-    for name, role, key, folder in (("Jev Perps", "Kalshi perps · running desk (was Jev Majors)", "jevmajors.main", "jev-majors"),
-                                    ("Perps lane A", "baseline Jev recorder (no positioning data)", "jevmajors.guarded", "jev-majors-guarded"),
-                                    ("Perps lane C", "opposite-of-desk recorder", "jevmajors.invert", "jev-majors-invert")):
+    for name, role, key, folder in (("Jev Perps", "inverted Jev signals (was Perps lane B) · Kalshi demo mirror", "jevmajors.invert", "jev-majors-invert"),
+                                    ("Perps lane A", "baseline Jev recorder (no positioning data)", "jevmajors.guarded", "jev-majors-guarded")):
         r = _db_trades(folder, "shadow_closed", "margin_usd", "coin")
-        A.append({"name": name, "role": role, "key": key, "mode": "paper" + (" + Kalshi demo mirror" if folder == "jev-majors" else ""), "open": r[1] if r else 0, "trades": r[0] if r else []})
+        A.append({"name": name, "role": role, "key": key, "mode": "paper" + (" + Kalshi demo mirror" if folder == "jev-majors-invert" else ""), "open": r[1] if r else 0, "trades": r[0] if r else []})
     r = _db_trades("jev-markets", "closed", "risk_usd", "symbol")
     A.append({"name": "Jev Markets", "role": "MNQ / MES / micro futures scalper", "key": "jevmarkets.main", "mode": "paper", "open": r[1] if r else 0, "trades": r[0] if r else []})
     tr = [(t.get("closed") or 0, t.get("pnl") or 0.0, t.get("cost") or 0.0, _short(t.get("title"), 40), "settled " + str(t.get("outcome"))) for f in ("trades.jsonl", "trades_general.jsonl") for t in _jl(P("jev-predict", "data", f)) if t.get("closed")]
