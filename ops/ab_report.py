@@ -18,13 +18,13 @@ DESKS = {"markets": {"A": f"{HOME}/jev-markets-guarded", "B": f"{HOME}/jev-marke
 
 def trades(desk, arm, t0=None):
     spec = DESKS[desk]
-    db = sqlite3.connect(f"file:{spec[arm]}/data/desk.db?mode=ro", uri=True, timeout=10)
-    out = []
-    for oid, created, sym, side, pnl, close, upd in db.execute(f"SELECT id, created, {spec['sym']}, side, pnl_usd, close, updated FROM orders WHERE status=? AND created>=? ORDER BY updated", (spec["status"], T0 if t0 is None else t0)):
-        c = json.loads(close or "{}")
-        out.append({"arm": arm, "id": oid, "symbol": sym, "side": side, "opened": round(created, 1), "closed": round(upd or 0, 1), "pnl_usd": round(pnl or 0.0, 2),
-                    spec["key"]: c.get(spec["key"]), "rule": (c.get("rule") or "")[:60], "held_min": c.get("held_minutes")})
-    return out
+    with sqlite3.connect(f"file:{spec[arm]}/data/desk.db?mode=ro", uri=True, timeout=10) as db:
+        out = []
+        for oid, created, sym, side, pnl, close, upd in db.execute(f"SELECT id, created, {spec['sym']}, side, pnl_usd, close, updated FROM orders WHERE status=? AND created>=? ORDER BY updated", (spec["status"], T0 if t0 is None else t0)):
+            c = json.loads(close or "{}")
+            out.append({"arm": arm, "id": oid, "symbol": sym, "side": side, "opened": round(created, 1), "closed": round(upd or 0, 1), "pnl_usd": round(pnl or 0.0, 2),
+                        spec["key"]: c.get(spec["key"]), "rule": (c.get("rule") or "")[:60], "held_min": c.get("held_minutes")})
+        return out
 
 
 def metrics(rows, desk):
@@ -67,16 +67,16 @@ def compare(a_rows, b_rows, desk):
 def pairs(desk, a_rows, b_rows):
     """Majors invert test: pair every Jev-following trade (A) with the opposite trade B opened from it (B's order body carries mirror_of = A's order id). Returns summary stats; the rows go to export/ab_pairs.jsonl."""
     spec = DESKS[desk]
-    db = sqlite3.connect(f"file:{spec['B']}/data/desk.db?mode=ro", uri=True, timeout=10)
-    link = {}
-    for oid, body in db.execute("SELECT id, body FROM orders WHERE shadow=1"):
-        try:
-            b = json.loads(body)
-            b = b.get("order") if isinstance(b.get("order"), dict) else b
-        except ValueError:
-            continue
-        if b.get("mirror_of"):
-            link[b["mirror_of"]] = oid
+    with sqlite3.connect(f"file:{spec['B']}/data/desk.db?mode=ro", uri=True, timeout=10) as db:
+        link = {}
+        for oid, body in db.execute("SELECT id, body FROM orders WHERE shadow=1"):
+            try:
+                b = json.loads(body)
+                b = b.get("order") if isinstance(b.get("order"), dict) else b
+            except ValueError:
+                continue
+            if b.get("mirror_of"):
+                link[b["mirror_of"]] = oid
     bmap = {r["id"]: r for r in b_rows}
     rows = []
     for ar in a_rows:
@@ -99,23 +99,23 @@ def lane_c(desk):
     if not tc or "C" not in spec or not os.path.exists(f"{spec['C']}/data/desk.db"):
         return None
     a, b, c = trades(desk, "A", tc), trades(desk, "B", tc), trades(desk, "C", tc)
-    db = sqlite3.connect(f"file:{spec['C']}/data/desk.db?mode=ro", uri=True, timeout=10)
-    link = {}
-    for oid, body in db.execute("SELECT id, body FROM orders WHERE shadow=1"):
-        try:
-            x = json.loads(body)
-            x = x.get("order") if isinstance(x.get("order"), dict) else x
-        except ValueError:
-            continue
-        if x.get("mirror_of"):
-            link[x["mirror_of"]] = oid
-    cm = {r["id"]: r for r in c}
-    rows = []
-    for br in b:
-        cr = cm.get(link.get(br["id"]))
-        if cr:
-            rows.append({"b_id": br["id"], "c_id": cr["id"], "symbol": br["symbol"], "b_side": br["side"], "c_side": cr["side"], "b_pnl": br["pnl_usd"], "c_pnl": cr["pnl_usd"], "b_roe": br.get("roe"), "c_roe": cr.get("roe"), "b_rule": br["rule"], "c_rule": cr["rule"]})
-    n_open = db.execute("SELECT count(*) FROM orders WHERE shadow=1 AND status='shadow_open'").fetchone()[0]
+    with sqlite3.connect(f"file:{spec['C']}/data/desk.db?mode=ro", uri=True, timeout=10) as db:
+        link = {}
+        for oid, body in db.execute("SELECT id, body FROM orders WHERE shadow=1"):
+            try:
+                x = json.loads(body)
+                x = x.get("order") if isinstance(x.get("order"), dict) else x
+            except ValueError:
+                continue
+            if x.get("mirror_of"):
+                link[x["mirror_of"]] = oid
+        cm = {r["id"]: r for r in c}
+        rows = []
+        for br in b:
+            cr = cm.get(link.get(br["id"]))
+            if cr:
+                rows.append({"b_id": br["id"], "c_id": cr["id"], "symbol": br["symbol"], "b_side": br["side"], "c_side": cr["side"], "b_pnl": br["pnl_usd"], "c_pnl": cr["pnl_usd"], "b_roe": br.get("roe"), "c_roe": cr.get("roe"), "b_rule": br["rule"], "c_rule": cr["rule"]})
+        n_open = db.execute("SELECT count(*) FROM orders WHERE shadow=1 AND status='shadow_open'").fetchone()[0]
     return {"started": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(tc)), "A": metrics(a, desk) if a else {"n": 0}, "B": metrics(b, desk) if b else {"n": 0}, "C": metrics(c, desk) if c else {"n": 0}, "c_open_now": n_open,
             "pairs": {"paired_closed": len(rows), "b_net_usd": round(sum(r["b_pnl"] for r in rows), 2), "c_net_usd": round(sum(r["c_pnl"] for r in rows), 2), "b_wins_c_loses": sum(1 for r in rows if r["b_pnl"] > 0 >= r["c_pnl"]), "c_wins_b_loses": sum(1 for r in rows if r["c_pnl"] > 0 >= r["b_pnl"])},
             "pair_rows": rows, "c_rows": c, "note": "C is a recorder: it never trades on its own and never touches the running desk. Compared on trades opened after C started; needs 30+ closed trades per lane for any verdict."}

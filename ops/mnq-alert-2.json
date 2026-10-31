@@ -1,7 +1,7 @@
 {
   "level": 29400,
   "direction": "up",
-  "armed": true,
+  "armed": false,
   "created": "2026-10-22T14:39:15-04:00",
   "note": "bottom confirmation: back above 29,400",
   "previous": {
@@ -11,5 +11,7 @@
     "created": "2026-10-20T12:31:36-04:00",
     "triggered_at": "2026-10-22T10:27:11",
     "triggered_price": 29387.8
-  }
+  },
+  "triggered_at": "2026-10-26T10:40:01",
+  "triggered_price": 29410.0
 }

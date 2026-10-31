@@ -1,7 +1,9 @@
 {
   "level": 28600,
   "direction": "down",
-  "armed": true,
+  "armed": false,
   "created": "2026-10-22T14:41:33-04:00",
-  "note": "typical extra dip after oversold (~28,500-28,600)"
+  "note": "typical extra dip after oversold (~28,500-28,600)",
+  "triggered_at": "2026-10-30T12:06:01",
+  "triggered_price": 28599.2
 }

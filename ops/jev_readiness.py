@@ -11,12 +11,12 @@ DESKS = [("Jev Majors (perps)", f"{HOME}/jev-majors/data/desk.db", "coin", "marg
 
 
 def load(path, name_col, stake_col):
-    db = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5)
-    kv = lambda k: (lambda r: json.loads(r[0]) if r else None)(db.execute("SELECT v FROM kv WHERE k=?", (k,)).fetchone())
-    epoch, start = kv("paper_epoch") or 0, kv("paper_start_bank") or 1000
-    cols = [c[1] for c in db.execute("PRAGMA table_info(orders)")]
-    cond = "status='closed'" if "shadow" not in cols else "status='shadow_closed' AND shadow=1"      # jev-markets has no shadow column
-    rows = db.execute(f"SELECT created, {name_col}, {stake_col}, pnl_usd, updated FROM orders WHERE {cond} AND created>=? ORDER BY updated", (epoch,)).fetchall()
+    with sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5) as db:
+        kv = lambda k: (lambda r: json.loads(r[0]) if r else None)(db.execute("SELECT v FROM kv WHERE k=?", (k,)).fetchone())
+        epoch, start = kv("paper_epoch") or 0, kv("paper_start_bank") or 1000
+        cols = [c[1] for c in db.execute("PRAGMA table_info(orders)")]
+        cond = "status='closed'" if "shadow" not in cols else "status='shadow_closed' AND shadow=1"      # jev-markets has no shadow column
+        rows = db.execute(f"SELECT created, {name_col}, {stake_col}, pnl_usd, updated FROM orders WHERE {cond} AND created>=? ORDER BY updated", (epoch,)).fetchall()
     return epoch, start, rows
 
 

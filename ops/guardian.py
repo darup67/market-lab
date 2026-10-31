@@ -41,42 +41,41 @@ def save(desk, g):
     os.replace(p + ".tmp", p)
 
 
-def db(desk):
-    return sqlite3.connect(f"file:{os.path.join(HOME, desk, 'data', 'desk.db')}?mode=ro", uri=True, timeout=10)
-
-
 def desk_lanes():
     since = time.time() - 14 * 86400
     g = {}
-    for body, ticket, pnl, upd in db("jev-desk").execute("SELECT body, ticket_usd, pnl_usd, updated FROM orders WHERE status='shadow_closed'"):
-        if (upd or 0) < since or not ticket:
-            continue
-        b = json.loads(body or "{}")
-        lane = "pattern" if b.get("pattern") else "pregrad:explore" if b.get("pregrad_explore") else (b.get("lane") or "gated")
-        g.setdefault(lane, []).append((pnl or 0.0) / ticket)
+    with sqlite3.connect(f"file:{os.path.join(HOME, 'jev-desk', 'data', 'desk.db')}?mode=ro", uri=True, timeout=10) as db:
+        for body, ticket, pnl, upd in db.execute("SELECT body, ticket_usd, pnl_usd, updated FROM orders WHERE status='shadow_closed'"):
+            if (upd or 0) < since or not ticket:
+                continue
+            b = json.loads(body or "{}")
+            lane = "pattern" if b.get("pattern") else "pregrad:explore" if b.get("pregrad_explore") else (b.get("lane") or "gated")
+            g.setdefault(lane, []).append((pnl or 0.0) / ticket)
     return {k: v for k, v in g.items() if len(v) >= 12 and st.mean(v) <= -0.04 and tstat(v) <= -1.0}, g
 
 
 def majors_coins():
     since = time.time() - 30 * 86400
     g = {}
-    for coin, side, margin, pnl, upd in db("jev-majors").execute("SELECT coin, side, margin_usd, pnl_usd, updated FROM orders WHERE status='shadow_closed'"):
-        if (upd or 0) < since or not margin:
-            continue
-        g.setdefault(f"{coin}:{side}", []).append((pnl or 0.0) / margin)
+    with sqlite3.connect(f"file:{os.path.join(HOME, 'jev-majors', 'data', 'desk.db')}?mode=ro", uri=True, timeout=10) as db:
+        for coin, side, margin, pnl, upd in db.execute("SELECT coin, side, margin_usd, pnl_usd, updated FROM orders WHERE status='shadow_closed'"):
+            if (upd or 0) < since or not margin:
+                continue
+            g.setdefault(f"{coin}:{side}", []).append((pnl or 0.0) / margin)
     return {k: v for k, v in g.items() if len(v) >= 8 and st.mean(v) <= -0.05 and tstat(v) <= -1.5}, g
 
 
 def markets_segments():
     since = time.time() - 14 * 86400
     rows = []
-    for symbol, body, close, pnl, upd, created in db("jev-markets").execute("SELECT symbol, body, close, pnl_usd, updated, created FROM orders WHERE status='closed' AND kind='future'"):
-        if (upd or 0) < since:
-            continue
-        b, c = json.loads(body or "{}"), json.loads(close or "{}")
-        if c.get("r") is None:
-            continue
-        rows.append({"symbol": symbol, "mode": b.get("scalp_mode") or "rth", "trigger": b.get("trigger") or "?", "hour": dt.datetime.fromtimestamp(created).hour // 3 * 3, "pnl": pnl or 0.0, "r": c["r"]})
+    with sqlite3.connect(f"file:{os.path.join(HOME, 'jev-markets', 'data', 'desk.db')}?mode=ro", uri=True, timeout=10) as db:
+        for symbol, body, close, pnl, upd, created in db.execute("SELECT symbol, body, close, pnl_usd, updated, created FROM orders WHERE status='closed' AND kind='future'"):
+            if (upd or 0) < since:
+                continue
+            b, c = json.loads(body or "{}"), json.loads(close or "{}")
+            if c.get("r") is None:
+                continue
+            rows.append({"symbol": symbol, "mode": b.get("scalp_mode") or "rth", "trigger": b.get("trigger") or "?", "hour": dt.datetime.fromtimestamp(created).hour // 3 * 3, "pnl": pnl or 0.0, "r": c["r"]})
     seg = {}
     for r in rows:
         for key in (f"mode:{r['mode']}", f"trigger:{r['trigger']}", f"hours:{r['hour']:02d}", f"symbol:{r['symbol']}"):

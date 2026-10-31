@@ -25,16 +25,16 @@ def _db_trades(folder, status, stake_col, sym_col):
     p = P(folder, "data", "desk.db")
     if not os.path.exists(p):
         return None
-    db = sqlite3.connect(f"file:{p}?mode=ro", uri=True, timeout=10)
-    rows = []
-    for c, u, pnl, st, sym, side, close in db.execute(f"SELECT created, updated, pnl_usd, {stake_col}, {sym_col}, side, close FROM orders WHERE status=?", (status,)):
-        try:
-            rule = (json.loads(close or "{}").get("rule") or "").split(":")[0]
-        except ValueError:
-            rule = ""
-        rows.append((u or c, pnl or 0.0, st or 0.0, f"{sym} {side}", _short(rule, 34)))
-    opn = db.execute("SELECT COUNT(*) FROM orders WHERE status=?", ("shadow_open" if status == "shadow_closed" else "open",)).fetchone()[0]
-    return rows, opn
+    with sqlite3.connect(f"file:{p}?mode=ro", uri=True, timeout=10) as db:
+        rows = []
+        for c, u, pnl, st, sym, side, close in db.execute(f"SELECT created, updated, pnl_usd, {stake_col}, {sym_col}, side, close FROM orders WHERE status=?", (status,)):
+            try:
+                rule = (json.loads(close or "{}").get("rule") or "").split(":")[0]
+            except ValueError:
+                rule = ""
+            rows.append((u or c, pnl or 0.0, st or 0.0, f"{sym} {side}", _short(rule, 34)))
+        opn = db.execute("SELECT COUNT(*) FROM orders WHERE status=?", ("shadow_open" if status == "shadow_closed" else "open",)).fetchone()[0]
+        return rows, opn
 
 
 def _jl(path):
@@ -53,7 +53,7 @@ def _jl(path):
 def agents():
     """[{name, role, key (supervisor id), mode, open, trades: [(t_close, pnl, stake)]}] in the order shown."""
     A = []
-    for name, role, key, folder in (("Jev Perps", "inverted Jev signals (was Perps lane B) · Kalshi demo mirror", "jevmajors.invert", "jev-majors-invert")):
+    for name, role, key, folder in (("Jev Perps", "inverted Jev signals (was Perps lane B) · Kalshi demo mirror", "jevmajors.invert", "jev-majors-invert"),):
         r = _db_trades(folder, "shadow_closed", "margin_usd", "coin")
         A.append({"name": name, "role": role, "key": key, "mode": "paper" + (" + Kalshi demo mirror" if folder == "jev-majors-invert" else ""), "open": r[1] if r else 0, "trades": r[0] if r else []})
     r = _db_trades("jev-markets", "closed", "risk_usd", "symbol")
@@ -66,10 +66,10 @@ def agents():
     A.append({"name": "Jev Predict", "role": "Kalshi 1-hour BTC (+ other markets)", "key": "jevpredict.main", "mode": "paper + Kalshi demo mirror", "open": n_open, "trades": tr})
     fo, ftr, live = 0, [], False
     try:
-        c = sqlite3.connect(f"file:{P('jev-coin-desk', 'data', 'fomo.db')}?mode=ro", uri=True, timeout=10)
-        ftr = [(t or 0, p or 0.0, u or 0.0, f"{sy} · {ch or 'solana'}", rs or "") for t, p, u, sy, ch, rs in c.execute("SELECT t_out, pnl, usd, sym, chain, reason FROM lane WHERE t_out IS NOT NULL")]
-        fo = c.execute("SELECT COUNT(*) FROM lane WHERE t_out IS NULL").fetchone()[0]
-        live = bool((json.load(open(P("jev-coin-desk", "config.json"))).get("fomo_live") or {}).get("enabled"))
+        with sqlite3.connect(f"file:{P('jev-coin-desk', 'data', 'fomo.db')}?mode=ro", uri=True, timeout=10) as c:
+            ftr = [(t or 0, p or 0.0, u or 0.0, f"{sy} · {ch or 'solana'}", rs or "") for t, p, u, sy, ch, rs in c.execute("SELECT t_out, pnl, usd, sym, chain, reason FROM lane WHERE t_out IS NOT NULL")]
+            fo = c.execute("SELECT COUNT(*) FROM lane WHERE t_out IS NULL").fetchone()[0]
+            live = bool((json.load(open(P("jev-coin-desk", "config.json"))).get("fomo_live") or {}).get("enabled"))
     except Exception:
         pass
     A.append({"name": "Jev Coin Desk", "role": "FOMO memecoin lane · Base early pools (own agent since 2026-10-22)", "key": "jevcoindesk.main", "mode": "paper" + (" · LIVE ARMED" if live else " · live off"), "open": fo, "trades": ftr})
