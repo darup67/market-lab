@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Jev daily report sections for the nightly recap email (recap.py): every Jev agent first, a win-rate chart, and a daily return distribution.
+"""Jev Markets + Jev Options IV only (2026-11-05 focus). Daily report sections for the nightly recap email (recap.py): every Jev agent first, a win-rate chart, and a daily return distribution.
 Read-only: it only reads each agent's own ledger. All numbers are built from the data each run (nothing hard-coded except where each agent keeps its ledger).
   jev_report.py            print the sections as text (no email)
 Agents: Majors (running desk), Majors A (baseline recorder), Majors C (opposite recorder), Markets, Predict, FOMO lane, Options IV; Shadow and AskJev are listed for status.
@@ -53,32 +53,14 @@ def _jl(path):
 def agents():
     """[{name, role, key (supervisor id), mode, open, trades: [(t_close, pnl, stake)]}] in the order shown."""
     A = []
-    for name, role, key, folder in (("Jev Perps", "inverted Jev signals (was Perps lane B) · Kalshi demo mirror", "jevmajors.invert", "jev-majors-invert"),):
-        r = _db_trades(folder, "shadow_closed", "margin_usd", "coin")
-        A.append({"name": name, "role": role, "key": key, "mode": "paper" + (" + Kalshi demo mirror" if folder == "jev-majors-invert" else ""), "open": r[1] if r else 0, "trades": r[0] if r else []})
-    r = _db_trades("jev-markets", "closed", "risk_usd", "symbol")
-    A.append({"name": "Jev Markets", "role": "MNQ / MES / micro futures scalper", "key": "jevmarkets.main", "mode": "paper", "open": r[1] if r else 0, "trades": r[0] if r else []})
-    tr = [(t.get("closed") or 0, t.get("pnl") or 0.0, t.get("cost") or 0.0, _short(t.get("title"), 40), "settled " + str(t.get("outcome"))) for f in ("trades.jsonl", "trades_general.jsonl") for t in _jl(P("jev-predict", "data", f)) if t.get("closed")]
-    try:
-        n_open = len(json.load(open(P("jev-predict", "data", "book.json"))).get("positions", [])) + len(json.load(open(P("jev-predict", "data", "book_general.json"))).get("positions", []))
-    except (OSError, ValueError):
-        n_open = 0
-    A.append({"name": "Jev Predict", "role": "Kalshi 1-hour BTC (+ other markets)", "key": "jevpredict.main", "mode": "paper + Kalshi demo mirror", "open": n_open, "trades": tr})
-    fo, ftr, live = 0, [], False
-    try:
-        with sqlite3.connect(f"file:{P('jev-coin-desk', 'data', 'fomo.db')}?mode=ro", uri=True, timeout=10) as c:
-            ftr = [(t or 0, p or 0.0, u or 0.0, f"{sy} · {ch or 'solana'}", rs or "") for t, p, u, sy, ch, rs in c.execute("SELECT t_out, pnl, usd, sym, chain, reason FROM lane WHERE t_out IS NOT NULL")]
-            fo = c.execute("SELECT COUNT(*) FROM lane WHERE t_out IS NULL").fetchone()[0]
-            live = bool((json.load(open(P("jev-coin-desk", "config.json"))).get("fomo_live") or {}).get("enabled"))
-    except Exception:
-        pass
-    A.append({"name": "Jev Coin Desk", "role": "FOMO memecoin lane · Base early pools (own agent since 2026-10-22)", "key": "jevcoindesk.main", "mode": "paper" + (" · LIVE ARMED" if live else " · live off"), "open": fo, "trades": ftr})
+    for name, role, key, folder in (("Jev Markets", "Regular desk · MNQ / MES scalper", "jevmarkets.main", "jev-markets"),
+                                    ("Markets Long-only", "A/B lane · longs only", "jevlanelong.main", "jev-markets-lane-long"),
+                                    ("Markets Short-only", "A/B lane · shorts only", "jevlaneshort.main", "jev-markets-lane-short")):
+        r = _db_trades(folder, "closed", "risk_usd", "symbol")
+        A.append({"name": name, "role": role, "key": key, "mode": "paper", "open": r[1] if r else 0, "trades": r[0] if r else []})
     ot = _jl(P("jev-options-iv", "data", "trades.jsonl"))
     A.append({"name": "Jev Options IV", "role": "bull call spreads from the IV email", "key": "jevoptionsiv.main", "mode": "paper (manual in Robinhood)", "open": sum(1 for t in ot if not t.get("closed")),
               "trades": [(t["closed"], t.get("pnl") or 0.0, t.get("cost") or 0.0, str(t.get("ticker")) + " spread", _short(t.get("rule"), 34)) for t in ot if t.get("closed")]})
-    A.append({"name": "Jev Shadow", "role": "Chronos + FinBERT forecasts, scored vs baseline", "key": "jevshadow", "mode": "forecast only", "open": 0, "trades": None,
-              "note": f"{len(_jl(P('jev-shadow', 'data', 'scored.jsonl')))} scored"})
-    A.append({"name": "AskJev", "role": "chat UI for typed questions", "key": "askjev", "mode": "service", "open": 0, "trades": None})
     return A
 
 
@@ -120,7 +102,7 @@ def build(now=None):
                      "t": str(len(t)) if a["w"] else (a.get("note") or "–"),
                      "p": ({"v": money(sum(x[1] for x in t)), "tone": "good" if sum(x[1] for x in t) >= 0 else "bad"} if t else "–") if a["w"] else "–",
                      "w": f"{fmt_pct(_wr(al))} ({len(al)})" if a["w"] else "–"})
-    sec1 = {"title": "All Jev agents", "note": "Status is the supervisor's last check" + (f" ({int(sup_age)} s ago)." if sup_age is not None else ": unreachable."),
+    sec1 = {"title": "Jev Markets and Options IV", "note": "Status is the supervisor's last check" + (f" ({int(sup_age)} s ago)." if sup_age is not None else ": unreachable."),
             "blocks": [{"type": "table", "columns": [{"key": "a", "label": "Agent"}, {"key": "s", "label": "Status"}, {"key": "o", "label": "Open", "align": "right"},
                                                      {"key": "t", "label": "Today", "align": "right"}, {"key": "p", "label": "Today P/L", "align": "right"}, {"key": "w", "label": "Win rate (n)", "align": "right"}], "rows": rows}]}
     # ---- 2. win-rate chart (HTML bars, email-safe)
@@ -141,11 +123,6 @@ def build(now=None):
         text.append(f"{a['name']}: today {fmt_pct(_wr(a['w']['today']))} ({len(a['w']['today'])}) · 7d {fmt_pct(_wr(a['w']['week']))} ({len(a['w']['week'])}) · all {fmt_pct(_wr(a['w']['all']))} ({len(a['w']['all'])})")
     html.append("</table>")
     note = "Green = 50%+, amber 35-50%, red under 35%. Win rate counts closed trades only (a desk that holds losers open, like Markets, looks better than its open book); small samples swing wildly, so read the all-time bar with its trade count."
-    pred = next(a for a in A if a["name"] == "Jev Predict")
-    cr = [t for t in _jl(P("jev-predict", "data", "trades.jsonl")) if t.get("closed") and t.get("category") == "crypto-1h"]
-    if cr:
-        wr = sum(1 for t in cr if (t.get("pnl") or 0) > 0) / len(cr)
-        note += f" Predict's live gate: 80% win rate over 75+ crypto-1h paper bets with net profit; now {100 * wr:.0f}% over {len(cr)}."
     sec2 = {"title": "Win rate", "note": note, "blocks": [{"type": "raw", "html": "".join(html), "text": "\n".join(text)}]}
     # ---- 3. dynamic daily distribution of returns per trade
     pooled = sorted((t[1] / t[2]) for a in A if a["w"] for t in a["w"]["week"] + [x for x in a["w"]["all"] if x[0] >= now - 14 * 86400 and x not in a["w"]["week"]] if t[2])

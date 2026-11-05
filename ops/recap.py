@@ -44,11 +44,8 @@ def suggestions(limit=3):
 def main():
     import jev_report
     secs, agents, meta = jev_report.build()
-    sug = suggestions()
-    if sug:
-        secs.append({"title": "Suggested changes", "note": "Not applied. Ask Claude to apply any of them.", "blocks": [{"type": "list", "items": sug}]})
     checks = (jload(f"{HOME}/market-lab/ops/data/status.json", {}) or {}).get("checks", [])
-    bad = [f"{c['check']}: {c['msg']}" for c in checks if c.get("level") == "fail"]
+    bad = [f"{c['check']}: {c['msg']}" for c in checks if c.get("level") == "fail" and any(k in c["check"].lower() for k in ("jev market", "jevmarkets", "markets", "options", "supervisor", "watchdog", "disk"))]
     if bad:
         secs.append({"title": "Needs attention", "blocks": [{"type": "list", "items": [x if len(x) <= 140 else x[:137] + "…" for x in bad[:5]]}]})
     total = meta["total"]
