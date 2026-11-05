@@ -165,8 +165,13 @@ def alert_spec(key, subject, body, good=False):
             "title": title, "subtitle": f"Agent Watchdog · {dt.datetime.now():%a %b %-d, %-I:%M %p} ET", "sections": secs, "footer": "Sent by the Agent Watchdog (ops/watchdog.py, every 15 minutes)."}
 
 
+FOCUS_KEYS = ("jevmarkets", "jevoptions", "supervisor", "jev-budget", "platform", "outbox")
+
+
 def alert(key, subject, body, every_hours=6, spec=None):
     """Email once per `key` per `every_hours`; a Mac notification if Gmail itself fails."""
+    if not key.startswith(FOCUS_KEYS):                                    # focus 2026-11-05: only Jev Markets, Options IV, supervisor, budget, mail outbox and platform alerts reach the user
+        return log(f"muted (outside focus): {subject}")
     last = state["alerted"].get(key, 0)
     if time.time() - last < every_hours * 3600:
         return
@@ -1071,7 +1076,7 @@ def main():
         check_flip(trading)
     except Exception as ex:
         note("flip notifier", "fail", f"watchdog error {ex!r}")
-    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_jevmarkets, check_supervisor, check_ab, check_phone_access, check_jev_budget, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
+    for fn in (check_agents, check_platform, check_git_storage, check_prelaunch, check_listed, check_jevmarkets, check_supervisor, check_phone_access, check_jev_budget, check_kalshi_commodity, check_kalshi_btc_1h, check_perplab, check_sentiment, check_sweep):
         try:
             fn()
         except Exception as ex:
