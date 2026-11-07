@@ -781,6 +781,8 @@ def check_phone_access():
 
 def check_supervisor():
     """The 30-second Jev supervisor (~/jev-client/supervisor.py) is the first layer under this watchdog; this is the other half of the mutual watch."""
+    if os.path.exists(os.path.join(HOME, "jev-client", "data", "SUPERVISOR_OFF")):          # user 2026-11-07: supervisor stopped on purpose; rm the file to resume the mutual watch
+        return note("jev supervisor", "ok", "stopped by the user (SUPERVISOR_OFF)")
     f = os.path.join(HOME, "jev-client", "data", "supervisor.json")
     age = time.time() - os.path.getmtime(f) if os.path.exists(f) else None
     j = job("com.dhruv.supervisor")
