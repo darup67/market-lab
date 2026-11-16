@@ -506,3 +506,14 @@
 {"t": 1794679021.2497, "email": "watchlist", "subject": "Event Desk \u00b7 Watchlist briefing: 0 earnings ahead, 0 material headlines (in morning brief)", "ok": true, "test": false}
 {"t": 1794750663.889772, "email": "watchlist", "subject": "Event Desk \u00b7 Watchlist briefing: 0 earnings ahead, 0 material headlines (in morning brief)", "ok": true, "test": false}
 {"t": 1794837070.337887, "email": "watchlist", "subject": "Event Desk \u00b7 Watchlist briefing: 0 earnings ahead, 0 material headlines (in morning brief)", "ok": true, "test": false}
+{"t": 1794847083.013132, "email": "biopharma", "subject": "Event Desk \u00b7 Market Digest: ACT 2 \u00b7 risk $3,710 \u00b7 max profit $2,390 \u00b7 ECHO+UBER \u00b7 11 sections", "ok": false, "test": false}
+{"t": 1794847083.0150201, "email": "communication", "subject": "Event Desk \u00b7 Market Digest: ACT 2 \u00b7 risk $3,710 \u00b7 max profit $2,390 \u00b7 ECHO+UBER \u00b7 11 sections", "ok": false, "test": false}
+{"t": 1794847083.0153039, "email": "consumer-discretionary", "subject": "Event Desk \u00b7 Market Digest: ACT 2 \u00b7 risk $3,710 \u00b7 max profit $2,390 \u00b7 ECHO+UBER \u00b7 11 sections", "ok": false, "test": false}
+{"t": 1794847083.015475, "email": "consumer-staples", "subject": "Event Desk \u00b7 Market Digest: ACT 2 \u00b7 risk $3,710 \u00b7 max profit $2,390 \u00b7 ECHO+UBER \u00b7 11 sections", "ok": false, "test": false}
+{"t": 1794847083.0157099, "email": "energy", "subject": "Event Desk \u00b7 Market Digest: ACT 2 \u00b7 risk $3,710 \u00b7 max profit $2,390 \u00b7 ECHO+UBER \u00b7 11 sections", "ok": false, "test": false}
+{"t": 1794847083.016203, "email": "financials", "subject": "Event Desk \u00b7 Market Digest: ACT 2 \u00b7 risk $3,710 \u00b7 max profit $2,390 \u00b7 ECHO+UBER \u00b7 11 sections", "ok": false, "test": false}
+{"t": 1794847083.01714, "email": "industrials", "subject": "Event Desk \u00b7 Market Digest: ACT 2 \u00b7 risk $3,710 \u00b7 max profit $2,390 \u00b7 ECHO+UBER \u00b7 11 sections", "ok": false, "test": false}
+{"t": 1794847083.017476, "email": "materials", "subject": "Event Desk \u00b7 Market Digest: ACT 2 \u00b7 risk $3,710 \u00b7 max profit $2,390 \u00b7 ECHO+UBER \u00b7 11 sections", "ok": false, "test": false}
+{"t": 1794847083.0176692, "email": "real-estate", "subject": "Event Desk \u00b7 Market Digest: ACT 2 \u00b7 risk $3,710 \u00b7 max profit $2,390 \u00b7 ECHO+UBER \u00b7 11 sections", "ok": false, "test": false}
+{"t": 1794847083.017897, "email": "technology", "subject": "Event Desk \u00b7 Market Digest: ACT 2 \u00b7 risk $3,710 \u00b7 max profit $2,390 \u00b7 ECHO+UBER \u00b7 11 sections", "ok": false, "test": false}
+{"t": 1794847083.0183182, "email": "utilities", "subject": "Event Desk \u00b7 Market Digest: ACT 2 \u00b7 risk $3,710 \u00b7 max profit $2,390 \u00b7 ECHO+UBER \u00b7 11 sections", "ok": false, "test": false}
