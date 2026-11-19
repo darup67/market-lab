@@ -652,3 +652,14 @@
 {"t": 1795019752.024029, "email": "technology", "subject": "Event Desk \u00b7 Market Digest: ACT 2 \u00b7 risk $3,225 \u00b7 max profit $1,775 \u00b7 XOM+COHR \u00b7 11 sections", "ok": true, "test": false}
 {"t": 1795019752.024321, "email": "utilities", "subject": "Event Desk \u00b7 Market Digest: ACT 2 \u00b7 risk $3,225 \u00b7 max profit $1,775 \u00b7 XOM+COHR \u00b7 11 sections", "ok": true, "test": false}
 {"t": 1795096257.652844, "email": "watchlist", "subject": "Event Desk \u00b7 Watchlist briefing: 0 earnings ahead, 0 material headlines (in morning brief)", "ok": true, "test": false}
+{"t": 1795106284.2008839, "email": "biopharma", "subject": "Event Desk \u00b7 Market Digest: no spread passes \u00b7 11 sections", "ok": false, "test": false}
+{"t": 1795106284.201835, "email": "communication", "subject": "Event Desk \u00b7 Market Digest: no spread passes \u00b7 11 sections", "ok": false, "test": false}
+{"t": 1795106284.202016, "email": "consumer-discretionary", "subject": "Event Desk \u00b7 Market Digest: no spread passes \u00b7 11 sections", "ok": false, "test": false}
+{"t": 1795106284.202185, "email": "consumer-staples", "subject": "Event Desk \u00b7 Market Digest: no spread passes \u00b7 11 sections", "ok": false, "test": false}
+{"t": 1795106284.2023418, "email": "energy", "subject": "Event Desk \u00b7 Market Digest: no spread passes \u00b7 11 sections", "ok": false, "test": false}
+{"t": 1795106284.2025018, "email": "financials", "subject": "Event Desk \u00b7 Market Digest: no spread passes \u00b7 11 sections", "ok": false, "test": false}
+{"t": 1795106284.2027771, "email": "industrials", "subject": "Event Desk \u00b7 Market Digest: no spread passes \u00b7 11 sections", "ok": false, "test": false}
+{"t": 1795106284.20322, "email": "materials", "subject": "Event Desk \u00b7 Market Digest: no spread passes \u00b7 11 sections", "ok": false, "test": false}
+{"t": 1795106284.203431, "email": "real-estate", "subject": "Event Desk \u00b7 Market Digest: no spread passes \u00b7 11 sections", "ok": false, "test": false}
+{"t": 1795106284.203582, "email": "technology", "subject": "Event Desk \u00b7 Market Digest: no spread passes \u00b7 11 sections", "ok": false, "test": false}
+{"t": 1795106284.203737, "email": "utilities", "subject": "Event Desk \u00b7 Market Digest: no spread passes \u00b7 11 sections", "ok": false, "test": false}
